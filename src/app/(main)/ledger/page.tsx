@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
+import { Label } from "@/components/ui/label"; // Added import
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Loader2, BookText, CalendarIcon, Filter, XCircle } from "lucide-react";
 import { format, parseISO, startOfDay, endOfDay } from "date-fns";
@@ -73,7 +74,7 @@ export default function LedgerPage() {
           id: `cash_${sale.id}`,
           date: sale.date,
           description: sale.details ? `${sale.item_service} - ${sale.details}` : sale.item_service,
-          type: sale.item_service?.startsWith("Payment for Credit") ? "Credit Payment (Cash)" : "Cash Sale",
+          type: sale.item_service?.startsWith("Payment for Credit") || sale.item_service?.startsWith("Partial cash for:") ? "Credit Payment (Cash)" : "Cash Sale",
           amount: sale.amount,
           currency: sale.currency,
           transaction_id: sale.id,
@@ -82,7 +83,7 @@ export default function LedgerPage() {
       });
 
       // 2. Fetch Credit Sales (Issued)
-      let creditQuery = supabase.from('credit_sales').select('*');
+      let creditQuery = supabase.from('credit_sales').select('*, customer_name, item_service, original_amount, currency, date');
       if (queryStartDate) creditQuery = creditQuery.gte('date', queryStartDate);
       if (queryEndDate) creditQuery = creditQuery.lte('date', queryEndDate);
       const { data: creditSalesData, error: creditSalesError } = await creditQuery;
@@ -138,7 +139,7 @@ export default function LedgerPage() {
           description: expense.paid_to ? `${expense.description} (Paid to: ${expense.paid_to})` : expense.description,
           type: "Expense",
           amount: expense.amount,
-          currency: "USD", // Assuming USD for expenses
+          currency: "USD", // Assuming USD for expenses as expenses table lacks currency
           transaction_id: expense.id,
           source_table: 'expenses',
         });
