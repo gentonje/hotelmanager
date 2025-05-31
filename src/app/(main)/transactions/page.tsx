@@ -19,10 +19,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarIcon, ListChecks, Loader2, DollarSign, CreditCard, LandmarkIcon } from "lucide-react";
+import { CalendarIcon, ListChecks, Loader2, DollarSign, CreditCard, LandmarkIcon, PlusCircle } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 
 // Import existing interfaces
 import type { Bank } from '@/app/(main)/banks/page';
@@ -65,6 +66,9 @@ export default function TransactionsPage() {
   const [isLoading, setIsLoading] = useState(false); // For fetching dropdown data
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
 
   const [customersList, setCustomersList] = useState<Pick<Customer, 'id' | 'name'>[]>([]);
   const [banksList, setBanksList] = useState<Pick<Bank, 'id' | 'name' | 'currency'>[]>([]);
@@ -94,6 +98,20 @@ export default function TransactionsPage() {
     fetchDropdownData();
   }, []);
 
+  useEffect(() => {
+    const newCustomerName = searchParams.get('newCustomerName');
+    if (newCustomerName && customersList.length > 0 && selectedType === 'cash_sale') {
+      const customerExists = customersList.find(c => c.name === newCustomerName);
+      if (customerExists) {
+        setCashSaleData(prev => ({ ...prev, customer_name: newCustomerName }));
+        // Potentially re-evaluate shortfall condition if form was reset
+      }
+      // Clean up URL by removing the query parameter
+      router.replace(pathname, undefined);
+    }
+  }, [searchParams, customersList, selectedType, router, pathname]);
+
+
   const resetAllForms = () => {
     setCashSaleData({ date: new Date(), amount: 0, item_service: '', details: '', customer_name: '', amount_tendered: undefined, due_date_for_balance: undefined });
     setCreditSaleData({ date: new Date(), status: 'Pending', amount: 0, customer_name: '', item_service: '', details: '' });
@@ -115,7 +133,7 @@ export default function TransactionsPage() {
   };
 
   const handleDateChange = (form: 'cash' | 'credit' | 'deposit', field: string, dateVal?: Date) => {
-    if (dateVal !== undefined) { // Allow clearing date by passing undefined
+    if (dateVal !== undefined) { 
       if (form === 'cash') setCashSaleData(prev => ({ ...prev, [field]: dateVal }));
       if (form === 'credit') setCreditSaleData(prev => ({ ...prev, [field]: dateVal }));
       if (form === 'deposit') setDepositData(prev => ({ ...prev, [field]: dateVal }));
@@ -151,7 +169,7 @@ export default function TransactionsPage() {
           setIsSubmitting(false); return;
         }
 
-        if (isShortfall) { // Amount tendered is less than sale amount
+        if (isShortfall) { 
           if (!cashSaleData.customer_name) {
             toast({ title: "Customer Name Required", description: "Please select a customer to record the outstanding balance as credit.", variant: "destructive" });
             setIsSubmitting(false); return;
@@ -162,7 +180,7 @@ export default function TransactionsPage() {
           }
 
           const creditAmount = cashSaleData.amount! - (cashSaleData.amount_tendered || 0);
-          const creditDetails = `Original Item: ${cashSaleData.item_service}. Sale Amount: ${cashSaleData.amount}. Tendered: ${cashSaleData.amount_tendered || 0}. Balance Due: ${creditAmount}. Notes: ${cashSaleData.details || ''}`;
+          const creditDetails = `Original Item: ${cashSaleData.item_service}. Sale Amount: ${cashSaleData.amount}. Tendered: ${cashSaleData.amount_tendered || 0}. Balance Due: ${creditAmount.toFixed(2)}. Notes: ${cashSaleData.details || ''}`;
           
           const creditToSave: Omit<CreditSale, 'id' | 'created_at' | 'updated_at'> = {
             customer_name: cashSaleData.customer_name!,
@@ -180,13 +198,13 @@ export default function TransactionsPage() {
             resetAllForms();
           }
 
-        } else { // Normal cash sale or exact/over payment
+        } else { 
           const saleToSave: Omit<CashSale, 'id' | 'created_at' | 'updated_at'> = {
             date: cashSaleData.date.toISOString(),
             item_service: cashSaleData.item_service!,
             details: cashSaleData.details,
             amount: cashSaleData.amount!,
-            // customer_name can be optionally stored for cash sales if needed, currently not in CashSale interface for table
+            customer_name: cashSaleData.customer_name, // Storing customer name if provided
           };
           const { error: insertCashError } = await supabase.from('cash_sales').insert([{ ...saleToSave, id: `cash_${Date.now()}` }]);
           error = insertCashError;
@@ -285,8 +303,20 @@ export default function TransactionsPage() {
             {isShortfall && (
               <>
                 <div className="grid gap-2 p-3 border border-destructive rounded-md bg-destructive/10">
-                   <p className="text-sm font-medium text-destructive">Shortfall Detected. Please provide customer details and due date for the balance.</p>
-                    <Label htmlFor="cash_customer_name_shortfall">Customer Name (for credit)</Label>
+                   <div className="flex items-center justify-between">
+                     <Label htmlFor="cash_customer_name_shortfall" className="text-destructive">Customer Name (for credit)</Label>
+                     <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-primary hover:text-primary/80"
+                        onClick={() => router.push(`/customers?redirect=${pathname}&newCustomerOrigin=transactionShortfall`)}
+                        disabled={isSubmitting || isLoading}
+                        title="Add New Customer"
+                      >
+                        <PlusCircle className="h-5 w-5" />
+                      </Button>
+                   </div>
                     <Select value={cashSaleData.customer_name || ''} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value)} disabled={isSubmitting || isLoading}>
                         <SelectTrigger id="cash_customer_name_shortfall">
                             <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
@@ -312,11 +342,42 @@ export default function TransactionsPage() {
               </>
             )}
 
+            {/* Optional Customer Name field for non-shortfall cash sales */}
+            {!isShortfall && (
+              <div className="grid gap-2">
+                 <div className="flex items-center justify-between">
+                    <Label htmlFor="cash_customer_name_optional">Customer Name (Optional)</Label>
+                     <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-primary hover:text-primary/80"
+                        onClick={() => router.push(`/customers?redirect=${pathname}&newCustomerOrigin=transactionShortfall`)} // can reuse same logic, or a different origin if needed
+                        disabled={isSubmitting || isLoading}
+                        title="Add New Customer"
+                      >
+                        <PlusCircle className="h-5 w-5" />
+                      </Button>
+                  </div>
+                <Select value={cashSaleData.customer_name || ''} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value)} disabled={isSubmitting || isLoading}>
+                    <SelectTrigger id="cash_customer_name_optional">
+                        <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer (Optional)"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="">None</SelectItem> 
+                        {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
+                        {customersList.length === 0 && <SelectItem value="" disabled>No customers found</SelectItem>}
+                    </SelectContent>
+                </Select>
+              </div>
+            )}
+
+
             {changeDue !== null && changeDue >= 0 && !isShortfall && (
               <p className="text-sm font-medium text-green-600">Change Due: ${(changeDue).toFixed(2)}</p>
             )}
              {changeDue !== null && changeDue < 0 && !isShortfall && (
-              <p className="text-sm font-medium text-destructive">Amount Tendered is less than Sale Amount. Consider selecting customer for credit.</p>
+              <p className="text-sm font-medium text-destructive">Amount Tendered is less than Sale Amount. Select customer and set due date to record balance.</p>
             )}
 
             <Button type="submit" disabled={isSubmitting || isLoading} className="w-full">
@@ -329,7 +390,20 @@ export default function TransactionsPage() {
         return (
           <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="grid gap-4">
              <div className="grid gap-2">
-              <Label htmlFor="credit_customer_name">Customer Name</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="credit_customer_name">Customer Name</Label>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-primary hover:text-primary/80"
+                    onClick={() => router.push(`/customers?redirect=${pathname}&newCustomerOrigin=transactionCredit`)}
+                    disabled={isSubmitting || isLoading}
+                    title="Add New Customer"
+                    >
+                    <PlusCircle className="h-5 w-5" />
+                </Button>
+              </div>
               <Select value={creditSaleData.customer_name || ''} onValueChange={(value) => handleSelectChange('credit', 'customer_name', value)} disabled={isSubmitting || isLoading}>
                 <SelectTrigger id="credit_customer_name">
                     <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
@@ -444,7 +518,20 @@ export default function TransactionsPage() {
               <Input id="deposit_reference_no" name="reference_no" value={depositData.reference_no || ''} onChange={(e) => handleInputChange('deposit', e)} required disabled={isSubmitting}/>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="deposit_deposited_by">Deposited By (Customer)</Label>
+              <div className="flex items-center justify-between">
+                 <Label htmlFor="deposit_deposited_by">Deposited By (Customer)</Label>
+                 <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-primary hover:text-primary/80"
+                    onClick={() => router.push(`/customers?redirect=${pathname}&newCustomerOrigin=transactionDeposit`)}
+                    disabled={isSubmitting || isLoading}
+                    title="Add New Customer"
+                    >
+                    <PlusCircle className="h-5 w-5" />
+                </Button>
+              </div>
                <Select value={depositData.deposited_by || ''} onValueChange={(value) => handleSelectChange('deposit', 'deposited_by', value)} disabled={isSubmitting || isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
@@ -509,6 +596,5 @@ export default function TransactionsPage() {
     </>
   );
 }
-
 
     

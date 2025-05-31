@@ -32,6 +32,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export interface Customer {
   id: string;
@@ -51,6 +52,8 @@ export default function CustomersPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const fetchCustomers = async () => {
     setIsLoading(true);
@@ -90,7 +93,7 @@ export default function CustomersPage() {
     }
     setIsSubmitting(true);
 
-    const customerToSave = {
+    const customerToSave: Partial<Customer> = { // Omit ID for inserts
       name: currentCustomer.name!,
       email: currentCustomer.email,
       phone: currentCustomer.phone,
@@ -98,6 +101,8 @@ export default function CustomersPage() {
     };
 
     let error = null;
+    let savedCustomerName = customerToSave.name;
+
     if (editingCustomer) {
       const { error: updateError } = await supabase
         .from('customers')
@@ -109,18 +114,32 @@ export default function CustomersPage() {
         ...customerToSave,
         id: `cust_${Date.now()}` // Client-side ID generation
       };
-      const { error: insertError } = await supabase
+      const { data, error: insertError } = await supabase
         .from('customers')
-        .insert([customerWithId]);
+        .insert([customerWithId])
+        .select() // select to get the inserted data back if needed
+        .single();
       error = insertError;
+      if(data) savedCustomerName = data.name; // ensure we use the exact saved name
     }
 
     if (error) {
       toast({ title: `Error ${editingCustomer ? 'updating' : 'adding'} customer`, description: error.message, variant: "destructive" });
     } else {
       toast({ title: `Customer ${editingCustomer ? 'updated' : 'added'} successfully`, variant: "default" });
-      resetForm();
-      fetchCustomers();
+      
+      const redirectUrl = searchParams.get('redirect');
+      const newCustomerOrigin = searchParams.get('newCustomerOrigin');
+
+      if (redirectUrl && newCustomerOrigin && (newCustomerOrigin === 'transactionShortfall' || newCustomerOrigin === 'transactionCredit' || newCustomerOrigin === 'transactionDeposit') && savedCustomerName) {
+        resetForm(); // Reset this modal
+        // Navigate back with the new customer's name
+        router.push(`${redirectUrl}?newCustomerName=${encodeURIComponent(savedCustomerName)}`);
+      } else {
+        // Normal customer addition
+        resetForm();
+        fetchCustomers();
+      }
     }
     setIsSubmitting(false);
   };
@@ -268,3 +287,6 @@ export default function CustomersPage() {
     </>
   );
 }
+
+
+    
