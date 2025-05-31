@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarIcon, CreditCard, PlusCircle, Edit2, Trash2, CheckCircle2, Loader2 } from "lucide-react";
+import { CalendarIcon, CreditCard, PlusCircle, Edit2, Trash2, CheckCircle2, Loader2, Landmark } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -44,9 +44,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import type { Bank } from '@/app/(main)/banks/page'; // For bank list
 
 type CreditStatus = 'Pending' | 'Paid' | 'Overdue';
 type Currency = 'USD' | 'SSP';
+type PaymentMethod = 'cash' | 'bank_deposit';
 
 export interface CreditSale {
   id: string;
@@ -54,7 +56,7 @@ export interface CreditSale {
   item_service: string;
   details?: string;
   amount: number;
-  currency: Currency; // Added currency
+  currency: Currency;
   date: string; // Store as ISO string
   due_date?: string; // Store as ISO string
   status: CreditStatus;
@@ -67,14 +69,28 @@ interface FormCreditSale extends Omit<CreditSale, 'date' | 'due_date'> {
   due_date?: Date;
 }
 
+interface PaymentDetails {
+  paymentDate: Date;
+  paymentMethod: PaymentMethod;
+  bankName?: string;
+  depositReference?: string;
+}
+
 
 export default function CreditPage() {
   const [creditSales, setCreditSales] = useState<CreditSale[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<CreditSale | null>(null);
   const [currentSale, setCurrentSale] = useState<Partial<FormCreditSale>>({ date: new Date(), status: 'Pending', currency: 'USD' });
+  
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [saleForPayment, setSaleForPayment] = useState<CreditSale | null>(null);
+  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>({ paymentDate: new Date(), paymentMethod: 'cash'});
+  const [banksList, setBanksList] = useState<Pick<Bank, 'id' | 'name' | 'currency'>[]>([]);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
   const { toast } = useToast();
 
   const fetchCreditSales = async () => {
@@ -92,8 +108,18 @@ export default function CreditPage() {
     setIsLoading(false);
   };
 
+  const fetchBanks = async () => {
+    const { data, error } = await supabase.from('banks').select('id, name, currency');
+    if (error) {
+      toast({ title: "Error fetching banks", description: error.message, variant: "destructive" });
+    } else {
+      setBanksList(data || []);
+    }
+  };
+
   useEffect(() => {
     fetchCreditSales();
+    fetchBanks();
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -117,7 +143,13 @@ export default function CreditPage() {
     setEditingSale(null);
     setCurrentSale({ date: new Date(), status: 'Pending', currency: 'USD' });
     setIsModalOpen(false);
-  }
+  };
+
+  const resetPaymentForm = () => {
+    setSaleForPayment(null);
+    setPaymentDetails({ paymentDate: new Date(), paymentMethod: 'cash' });
+    setIsPaymentModalOpen(false);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -173,19 +205,18 @@ export default function CreditPage() {
       ...sale,
       date: sale.date ? parseISO(sale.date) : new Date(),
       due_date: sale.due_date ? parseISO(sale.due_date) : undefined,
-      currency: sale.currency || 'USD', // Ensure currency is set
+      currency: sale.currency || 'USD',
     });
     setIsModalOpen(true);
   };
 
   const openNewSaleModal = () => {
-    setEditingSale(null);
-    setCurrentSale({ date: new Date(), status: 'Pending', currency: 'USD' });
+    resetForm();
     setIsModalOpen(true);
   };
   
   const handleDeleteSale = async (saleId: string) => {
-    setIsSubmitting(true);
+    setIsSubmitting(true); // Use general submitting for delete as well
     const { error } = await supabase
       .from('credit_sales')
       .delete()
@@ -200,23 +231,91 @@ export default function CreditPage() {
     setIsSubmitting(false);
   };
 
-  const markAsPaid = async (saleId: string) => {
-    // This function will be enhanced later for the "Record Full Payment" dialog.
-    // For now, it just updates the status.
-    setIsSubmitting(true);
-    const { error } = await supabase
-      .from('credit_sales')
-      .update({ status: 'Paid' })
-      .eq('id', saleId);
-
-    if (error) {
-      toast({ title: "Error marking sale as paid", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Sale marked as paid", variant: "default" });
-      fetchCreditSales();
-    }
-    setIsSubmitting(false);
+  const openPaymentDialog = (sale: CreditSale) => {
+    setSaleForPayment(sale);
+    setPaymentDetails({ paymentDate: new Date(), paymentMethod: 'cash' });
+    setIsPaymentModalOpen(true);
   };
+
+  const handlePaymentDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setPaymentDetails(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handlePaymentDateChange = (dateVal: Date | undefined) => {
+     if (dateVal) {
+      setPaymentDetails(prev => ({ ...prev, paymentDate: dateVal }));
+    }
+  };
+
+  const handlePaymentMethodChange = (value: string) => {
+    setPaymentDetails(prev => ({ ...prev, paymentMethod: value as PaymentMethod, bankName: '', depositReference: '' }));
+  };
+  
+  const handlePaymentBankChange = (value: string) => {
+    setPaymentDetails(prev => ({ ...prev, bankName: value }));
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!saleForPayment) return;
+
+    setIsSubmittingPayment(true);
+
+    try {
+      // 1. Update credit_sales status to 'Paid'
+      const { error: updateStatusError } = await supabase
+        .from('credit_sales')
+        .update({ status: 'Paid', updated_at: new Date().toISOString() })
+        .eq('id', saleForPayment.id);
+
+      if (updateStatusError) throw updateStatusError;
+
+      // 2. Record the financial transaction
+      if (paymentDetails.paymentMethod === 'cash') {
+        const cashSaleRecord = {
+          id: `cash_pay_${Date.now()}`,
+          date: paymentDetails.paymentDate.toISOString(),
+          item_service: `Payment for Credit: ${saleForPayment.item_service} (ID: ${saleForPayment.id})`,
+          details: `Customer: ${saleForPayment.customer_name}`,
+          amount: saleForPayment.amount,
+          customer_name: saleForPayment.customer_name,
+          // Cash sales table does not have currency. Assumes base currency.
+        };
+        const { error: cashError } = await supabase.from('cash_sales').insert([cashSaleRecord]);
+        if (cashError) throw cashError;
+
+      } else if (paymentDetails.paymentMethod === 'bank_deposit') {
+        if (!paymentDetails.bankName || !paymentDetails.depositReference) {
+          toast({ title: "Missing deposit details", description: "Please select a bank and enter a reference number.", variant: "destructive" });
+          setIsSubmittingPayment(false);
+          return;
+        }
+        const depositRecord = {
+          id: `dep_pay_${Date.now()}`,
+          date: paymentDetails.paymentDate.toISOString(),
+          amount: saleForPayment.amount,
+          currency: saleForPayment.currency,
+          bank: paymentDetails.bankName,
+          reference_no: paymentDetails.depositReference,
+          deposited_by: saleForPayment.customer_name,
+          description: `Payment for Credit Sale ID: ${saleForPayment.id}`,
+        };
+        const { error: depositError } = await supabase.from('deposits').insert([depositRecord]);
+        if (depositError) throw depositError;
+      }
+
+      toast({ title: "Payment Recorded Successfully", description: `Credit sale for ${saleForPayment.customer_name} marked as paid.`, variant: "default" });
+      resetPaymentForm();
+      fetchCreditSales();
+
+    } catch (error: any) {
+      toast({ title: "Error recording payment", description: error.message, variant: "destructive" });
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  };
+
 
   const getStatusBadgeVariant = (status: CreditStatus) => {
     switch (status) {
@@ -230,11 +329,12 @@ export default function CreditPage() {
   return (
     <>
       <PageTitle title="Credit Management" subtitle="Track and manage items/services sold on credit." icon={CreditCard}>
-        <Button onClick={openNewSaleModal} disabled={isLoading || isSubmitting}>
+        <Button onClick={openNewSaleModal} disabled={isLoading || isSubmitting || isSubmittingPayment}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Credit Sale
         </Button>
       </PageTitle>
 
+      {/* Add/Edit Credit Sale Dialog */}
       <Dialog open={isModalOpen} onOpenChange={(isOpen) => { if (!isSubmitting) setIsModalOpen(isOpen); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -320,6 +420,75 @@ export default function CreditPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Record Full Payment Dialog */}
+      <Dialog open={isPaymentModalOpen} onOpenChange={(isOpen) => { if (!isSubmittingPayment) setIsPaymentModalOpen(isOpen); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-headline">Record Full Payment</DialogTitle>
+            {saleForPayment && (
+              <DialogDescription className="font-body">
+                Recording payment for {saleForPayment.customer_name} (Amount: {saleForPayment.currency} {saleForPayment.amount.toFixed(2)}).
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          {saleForPayment && (
+            <form onSubmit={handleRecordPayment} className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="paymentDate" className="font-body">Payment Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !paymentDetails.paymentDate && "text-muted-foreground")} disabled={isSubmittingPayment}>
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {paymentDetails.paymentDate ? format(paymentDetails.paymentDate, "PPP") : <span>Pick a date</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={paymentDetails.paymentDate} onSelect={handlePaymentDateChange} initialFocus /></PopoverContent>
+                </Popover>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="paymentMethod" className="font-body">Payment Method</Label>
+                <Select value={paymentDetails.paymentMethod} onValueChange={handlePaymentMethodChange} disabled={isSubmittingPayment}>
+                  <SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash Payment</SelectItem>
+                    <SelectItem value="bank_deposit">Bank Deposit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {paymentDetails.paymentMethod === 'bank_deposit' && (
+                <>
+                  <div className="grid gap-2">
+                    <Label htmlFor="bankName" className="font-body">Bank Account</Label>
+                    <Select value={paymentDetails.bankName || ''} onValueChange={handlePaymentBankChange} disabled={isSubmittingPayment}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={banksList.length === 0 ? "No banks available" : "Select bank"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {banksList.length > 0 ? banksList.map(bank => (
+                          <SelectItem key={bank.id} value={bank.name}>{bank.name} ({bank.currency})</SelectItem>
+                        )) : <SelectItem value="" disabled>No banks configured</SelectItem>}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="depositReference" className="font-body">Deposit Reference No.</Label>
+                    <Input id="depositReference" name="depositReference" value={paymentDetails.depositReference || ''} onChange={handlePaymentDetailsChange} required disabled={isSubmittingPayment}/>
+                  </div>
+                </>
+              )}
+              <DialogFooter>
+                <DialogClose asChild><Button type="button" variant="outline" onClick={resetPaymentForm} disabled={isSubmittingPayment}>Cancel</Button></DialogClose>
+                <Button type="submit" disabled={isSubmittingPayment}>
+                  {isSubmittingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Record Payment
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+
       <Card className="shadow-lg">
         <CardHeader>
           <CardTitle className="font-headline">Credit Sales History</CardTitle>
@@ -356,16 +525,16 @@ export default function CreditPage() {
                     <TableCell><Badge variant={getStatusBadgeVariant(sale.status)} className="font-body">{sale.status}</Badge></TableCell>
                     <TableCell className="text-right space-x-1">
                       {sale.status !== 'Paid' && (
-                        <Button variant="ghost" size="icon" onClick={() => markAsPaid(sale.id)} title="Mark as Paid" disabled={isSubmitting}>
+                        <Button variant="ghost" size="icon" onClick={() => openPaymentDialog(sale)} title="Record Full Payment" disabled={isSubmitting || isSubmittingPayment}>
                           <CheckCircle2 className="h-4 w-4 text-green-600" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => openEditModal(sale)} title="Edit Sale" disabled={isSubmitting}>
+                      <Button variant="ghost" size="icon" onClick={() => openEditModal(sale)} title="Edit Sale" disabled={isSubmitting || isSubmittingPayment}>
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                           <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete Sale" disabled={isSubmitting}>
+                           <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete Sale" disabled={isSubmitting || isSubmittingPayment}>
                              <Trash2 className="h-4 w-4" />
                            </Button>
                         </AlertDialogTrigger>
@@ -377,9 +546,9 @@ export default function CreditPage() {
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteSale(sale.id)} className="bg-destructive hover:bg-destructive/90" disabled={isSubmitting}>
-                              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            <AlertDialogCancel disabled={isSubmitting || isSubmittingPayment}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteSale(sale.id)} className="bg-destructive hover:bg-destructive/90" disabled={isSubmitting || isSubmittingPayment}>
+                              {(isSubmitting || isSubmittingPayment) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                               Delete
                             </AlertDialogAction>
                           </AlertDialogFooter>
@@ -400,3 +569,6 @@ export default function CreditPage() {
     </>
   );
 }
+
+
+    
