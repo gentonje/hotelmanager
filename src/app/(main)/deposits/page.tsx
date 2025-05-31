@@ -33,6 +33,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface Deposit {
   id: string;
@@ -43,11 +44,7 @@ interface Deposit {
   depositedBy: string;
 }
 
-const initialDeposits: Deposit[] = [
-  { id: 'dep1', date: new Date(2024, 6, 20), amount: 1500, bank: 'Equity Bank', referenceNo: 'EQREF001', depositedBy: 'John Doe' },
-  { id: 'dep2', date: new Date(2024, 6, 19), amount: 2200, bank: 'KCB Bank', referenceNo: 'KCBREF078', depositedBy: 'Jane Smith' },
-  { id: 'dep3', date: new Date(2024, 6, 18), amount: 950, bank: 'Co-operative Bank', referenceNo: 'COOPREF032', depositedBy: 'John Doe' },
-];
+const initialDeposits: Deposit[] = [];
 
 export default function DepositsPage() {
   const [deposits, setDeposits] = useState<Deposit[]>(initialDeposits);
@@ -233,3 +230,4 @@ export default function DepositsPage() {
     </>
   );
 }
+
