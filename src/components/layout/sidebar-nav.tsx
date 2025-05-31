@@ -14,6 +14,7 @@ import {
   Hotel,
   Users,
   Truck,
+  Building2, // Added Building2 icon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -26,6 +27,7 @@ import {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/deposits", label: "Deposits", icon: Landmark },
+  { href: "/banks", label: "Bank Accounts", icon: Building2 }, // New Banks link
   { href: "/inventory", label: "Inventory", icon: Archive },
   { href: "/credit", label: "Credit Sales", icon: CreditCard },
   { href: "/expenses", label: "Expenses", icon: Receipt },

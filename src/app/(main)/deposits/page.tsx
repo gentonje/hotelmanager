@@ -23,6 +23,13 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -35,10 +42,13 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+type Currency = 'USD' | 'SSP';
+
 interface Deposit {
   id: string;
   date: Date;
   amount: number;
+  currency: Currency;
   bank: string;
   referenceNo: string;
   depositedBy: string;
@@ -48,26 +58,37 @@ const initialDeposits: Deposit[] = [];
 
 export default function DepositsPage() {
   const [deposits, setDeposits] = useState<Deposit[]>(initialDeposits);
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [amount, setAmount] = useState('');
-  const [bank, setBank] = useState('');
-  const [referenceNo, setReferenceNo] = useState('');
-  const [depositedBy, setDepositedBy] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDeposit, setEditingDeposit] = useState<Deposit | null>(null);
+  const [currentDeposit, setCurrentDeposit] = useState<Partial<Deposit>>({ date: new Date(), currency: 'USD' });
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setCurrentDeposit(prev => ({ ...prev, [name]: name === 'amount' ? parseFloat(value) || 0 : value }));
+  };
+
+  const handleDateChange = (dateVal: Date | undefined) => {
+    setCurrentDeposit(prev => ({ ...prev, date: dateVal }));
+  };
+
+  const handleCurrencyChange = (value: string) => {
+    setCurrentDeposit(prev => ({ ...prev, currency: value as Currency }));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!date || !amount || !bank || !referenceNo || !depositedBy) {
+    if (!currentDeposit.date || !currentDeposit.amount || !currentDeposit.currency || !currentDeposit.bank || !currentDeposit.referenceNo || !currentDeposit.depositedBy) {
       alert("Please fill all fields"); // Replace with a proper toast notification
       return;
     }
     const newDeposit: Deposit = {
       id: editingDeposit ? editingDeposit.id : `dep${Date.now()}`,
-      date,
-      amount: parseFloat(amount),
-      bank,
-      referenceNo,
-      depositedBy,
+      date: currentDeposit.date!,
+      amount: currentDeposit.amount!,
+      currency: currentDeposit.currency!,
+      bank: currentDeposit.bank!,
+      referenceNo: currentDeposit.referenceNo!,
+      depositedBy: currentDeposit.depositedBy!,
     };
 
     if (editingDeposit) {
@@ -76,26 +97,25 @@ export default function DepositsPage() {
       setDeposits([newDeposit, ...deposits]);
     }
     resetForm();
+    setIsModalOpen(false);
   };
 
   const resetForm = () => {
-    setDate(new Date());
-    setAmount('');
-    setBank('');
-    setReferenceNo('');
-    setDepositedBy('');
+    setCurrentDeposit({ date: new Date(), currency: 'USD' });
     setEditingDeposit(null);
   };
 
-  const handleEdit = (deposit: Deposit) => {
+  const openEditModal = (deposit: Deposit) => {
     setEditingDeposit(deposit);
-    setDate(deposit.date);
-    setAmount(deposit.amount.toString());
-    setBank(deposit.bank);
-    setReferenceNo(deposit.referenceNo);
-    setDepositedBy(deposit.depositedBy);
+    setCurrentDeposit(deposit);
+    setIsModalOpen(true);
   };
   
+  const openNewDepositModal = () => {
+    resetForm();
+    setIsModalOpen(true);
+  };
+
   const handleDelete = (depositId: string) => {
     setDeposits(deposits.filter(d => d.id !== depositId));
   };
@@ -103,66 +123,80 @@ export default function DepositsPage() {
   return (
     <>
       <PageTitle title="Bank Deposits" subtitle="Manage and track all bank deposits." icon={Landmark}>
-        <Dialog open={editingDeposit !== null} onOpenChange={(isOpen) => !isOpen && resetForm()}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setEditingDeposit(null)}> 
-              <PlusCircle className="mr-2 h-4 w-4" /> Add New Deposit
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[525px]">
-            <DialogHeader>
-              <DialogTitle className="font-headline">{editingDeposit ? "Edit Deposit" : "Add New Deposit"}</DialogTitle>
-              <DialogDescription className="font-body">
-                {editingDeposit ? "Update the details of the bank deposit." : "Enter the details of the new bank deposit."}
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="date" className="text-right font-body">Date</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-[280px] justify-start text-left font-normal col-span-3",
-                        !date && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? format(date, "PPP") : <span>Pick a date</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="amount" className="text-right font-body">Amount</Label>
-                <Input id="amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g., 1500.00" className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="bank" className="text-right font-body">Bank</Label>
-                <Input id="bank" value={bank} onChange={(e) => setBank(e.target.value)} placeholder="e.g., Equity Bank" className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="referenceNo" className="text-right font-body">Reference No.</Label>
-                <Input id="referenceNo" value={referenceNo} onChange={(e) => setReferenceNo(e.target.value)} placeholder="e.g., EQREF001" className="col-span-3" />
-              </div>
-              <div className="grid grid-cols-4 items-center gap-4">
-                <Label htmlFor="depositedBy" className="text-right font-body">Deposited By</Label>
-                <Input id="depositedBy" value={depositedBy} onChange={(e) => setDepositedBy(e.target.value)} placeholder="e.g., John Doe" className="col-span-3" />
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                   <Button type="button" variant="outline" onClick={resetForm}>Cancel</Button>
-                </DialogClose>
-                <Button type="submit">{editingDeposit ? "Save Changes" : "Add Deposit"}</Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openNewDepositModal}> 
+          <PlusCircle className="mr-2 h-4 w-4" /> Add New Deposit
+        </Button>
       </PageTitle>
+
+      <Dialog open={isModalOpen} onOpenChange={(isOpen) => {
+        setIsModalOpen(isOpen);
+        if (!isOpen) resetForm();
+      }}>
+        <DialogContent className="sm:max-w-[525px]">
+          <DialogHeader>
+            <DialogTitle className="font-headline">{editingDeposit ? "Edit Deposit" : "Add New Deposit"}</DialogTitle>
+            <DialogDescription className="font-body">
+              {editingDeposit ? "Update the details of the bank deposit." : "Enter the details of the new bank deposit."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="date" className="font-body">Date</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !currentDeposit.date && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {currentDeposit.date ? format(currentDeposit.date, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={currentDeposit.date} onSelect={handleDateChange} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="amount" className="font-body">Amount</Label>
+                <Input id="amount" name="amount" type="number" value={currentDeposit.amount || ''} onChange={handleInputChange} placeholder="e.g., 1500.00" />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="currency" className="font-body">Currency</Label>
+                <Select value={currentDeposit.currency} onValueChange={handleCurrencyChange}>
+                  <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USD">USD</SelectItem>
+                    <SelectItem value="SSP">SSP</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="bank" className="font-body">Bank</Label>
+              <Input id="bank" name="bank" value={currentDeposit.bank || ''} onChange={handleInputChange} placeholder="e.g., Equity Bank" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="referenceNo" className="font-body">Reference No.</Label>
+              <Input id="referenceNo" name="referenceNo" value={currentDeposit.referenceNo || ''} onChange={handleInputChange} placeholder="e.g., EQREF001" />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="depositedBy" className="font-body">Deposited By</Label>
+              <Input id="depositedBy" name="depositedBy" value={currentDeposit.depositedBy || ''} onChange={handleInputChange} placeholder="e.g., John Doe" />
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                 <Button type="button" variant="outline" onClick={() => { setIsModalOpen(false); resetForm();}}>Cancel</Button>
+              </DialogClose>
+              <Button type="submit">{editingDeposit ? "Save Changes" : "Add Deposit"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Card className="shadow-lg">
         <CardHeader>
@@ -175,6 +209,7 @@ export default function DepositsPage() {
               <TableRow>
                 <TableHead className="font-body">Date</TableHead>
                 <TableHead className="font-body">Amount</TableHead>
+                <TableHead className="font-body">Currency</TableHead>
                 <TableHead className="font-body">Bank</TableHead>
                 <TableHead className="font-body">Reference No.</TableHead>
                 <TableHead className="font-body">Deposited By</TableHead>
@@ -185,19 +220,18 @@ export default function DepositsPage() {
               {deposits.length > 0 ? deposits.map((deposit) => (
                 <TableRow key={deposit.id}>
                   <TableCell className="font-body">{format(deposit.date, "PPP")}</TableCell>
-                  <TableCell className="font-semibold font-body">${deposit.amount.toFixed(2)}</TableCell>
+                  <TableCell className="font-semibold font-body">{deposit.amount.toFixed(2)}</TableCell>
+                  <TableCell className="font-body">{deposit.currency}</TableCell>
                   <TableCell className="font-body">{deposit.bank}</TableCell>
                   <TableCell className="font-body">{deposit.referenceNo}</TableCell>
                   <TableCell className="font-body">{deposit.depositedBy}</TableCell>
                   <TableCell className="text-right space-x-2">
-                    <DialogTrigger asChild>
-                       <Button variant="ghost" size="icon" onClick={() => handleEdit(deposit)}>
-                         <Edit2 className="h-4 w-4" />
-                       </Button>
-                    </DialogTrigger>
+                     <Button variant="ghost" size="icon" onClick={() => openEditModal(deposit)} title="Edit Deposit">
+                       <Edit2 className="h-4 w-4" />
+                     </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive">
+                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete Deposit">
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </AlertDialogTrigger>
@@ -220,7 +254,7 @@ export default function DepositsPage() {
                 </TableRow>
               )) : (
                  <TableRow>
-                    <TableCell colSpan={6} className="text-center font-body h-24">No deposits recorded yet.</TableCell>
+                    <TableCell colSpan={7} className="text-center font-body h-24">No deposits recorded yet.</TableCell>
                  </TableRow>
               )}
             </TableBody>
@@ -230,4 +264,3 @@ export default function DepositsPage() {
     </>
   );
 }
-
