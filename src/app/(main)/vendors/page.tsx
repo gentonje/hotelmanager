@@ -41,11 +41,7 @@ interface Vendor {
   address?: string;
 }
 
-const initialVendors: Vendor[] = [
-  { id: 'vendor1', name: 'Global Supplies Ltd.', contactPerson: 'Sarah Connor', email: 'sarah@globalsupplies.com', phone: '555-0101', address: '123 Supply Chain Rd, Metropolis' },
-  { id: 'vendor2', name: 'Tech Solutions Inc.', contactPerson: 'John Matrix', email: 'john.m@techsolutions.dev', phone: '555-0202', address: '456 Innovation Ave, Tech City' },
-  { id: 'vendor3', name: 'Fresh Produce Co.', contactPerson: 'Maria Sanchez', email: 'maria.s@freshproduce.farm', phone: '555-0303', address: '789 Farm Lane, Green Valley' },
-];
+const initialVendors: Vendor[] = [];
 
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>(initialVendors);

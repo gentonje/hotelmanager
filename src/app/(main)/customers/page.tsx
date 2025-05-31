@@ -40,11 +40,7 @@ interface Customer {
   address?: string;
 }
 
-const initialCustomers: Customer[] = [
-  { id: 'cust1', name: 'Alice Wonderland', email: 'alice.w@example.com', phone: '555-1111', address: '1 Wonder Way, Fantasy Land' },
-  { id: 'cust2', name: 'Bob The Builder', email: 'bob.b@example.com', phone: '555-2222', address: '2 Build It Up St, Construction Zone' },
-  { id: 'cust3', name: 'Charlie Brown', email: 'charlie.b@example.com', phone: '555-3333', address: '3 Good Grief Pl, Toon Town' },
-];
+const initialCustomers: Customer[] = [];
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
