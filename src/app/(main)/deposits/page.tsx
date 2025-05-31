@@ -44,6 +44,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+// Import interfaces from other pages for consistency
+import type { Bank } from '@/app/(main)/banks/page';
+import type { Customer } from '@/app/(main)/customers/page';
+
+
 type Currency = 'USD' | 'SSP';
 
 export interface Deposit {
@@ -51,9 +56,9 @@ export interface Deposit {
   date: string; // Store as ISO string
   amount: number;
   currency: Currency;
-  bank: string;
+  bank: string; // Stores bank name
   reference_no: string;
-  deposited_by: string;
+  deposited_by: string; // Stores customer name
   description?: string;
   created_at?: string;
   updated_at?: string;
@@ -65,10 +70,13 @@ interface FormDeposit extends Omit<Deposit, 'date'> {
 
 export default function DepositsPage() {
   const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [banksList, setBanksList] = useState<Pick<Bank, 'id' | 'name'>[]>([]);
+  const [customersList, setCustomersList] = useState<Pick<Customer, 'id' | 'name'>[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDeposit, setEditingDeposit] = useState<Deposit | null>(null);
   const [currentDeposit, setCurrentDeposit] = useState<Partial<FormDeposit>>({ date: new Date(), currency: 'USD' });
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingDropdownData, setIsFetchingDropdownData] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -87,8 +95,33 @@ export default function DepositsPage() {
     setIsLoading(false);
   };
 
+  const fetchBanksAndCustomers = async () => {
+    setIsFetchingDropdownData(true);
+    const { data: banksData, error: banksError } = await supabase
+      .from('banks')
+      .select('id, name');
+    
+    if (banksError) {
+      toast({ title: "Error fetching banks list", description: banksError.message, variant: "destructive" });
+    } else {
+      setBanksList(banksData || []);
+    }
+
+    const { data: customersData, error: customersError } = await supabase
+      .from('customers')
+      .select('id, name');
+
+    if (customersError) {
+      toast({ title: "Error fetching customers list", description: customersError.message, variant: "destructive" });
+    } else {
+      setCustomersList(customersData || []);
+    }
+    setIsFetchingDropdownData(false);
+  };
+
   useEffect(() => {
     fetchDeposits();
+    fetchBanksAndCustomers();
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -102,12 +135,16 @@ export default function DepositsPage() {
     }
   };
 
-  const handleCurrencyChange = (value: string) => {
-    setCurrentDeposit(prev => ({ ...prev, currency: value as Currency }));
+  const handleSelectChange = (fieldName: 'currency' | 'bank' | 'deposited_by', value: string) => {
+     if (fieldName === 'currency') {
+      setCurrentDeposit(prev => ({ ...prev, currency: value as Currency }));
+    } else {
+      setCurrentDeposit(prev => ({ ...prev, [fieldName]: value }));
+    }
   };
 
   const resetForm = () => {
-    setCurrentDeposit({ date: new Date(), currency: 'USD', description: '' });
+    setCurrentDeposit({ date: new Date(), currency: 'USD', description: '', bank: '', deposited_by: '' });
     setEditingDeposit(null);
     setIsModalOpen(false);
   };
@@ -169,7 +206,6 @@ export default function DepositsPage() {
   
   const openNewDepositModal = () => {
     resetForm(); 
-    setCurrentDeposit({ date: new Date(), currency: 'USD', description: '' }); 
     setIsModalOpen(true);
   };
 
@@ -192,7 +228,7 @@ export default function DepositsPage() {
   return (
     <>
       <PageTitle title="Bank Deposits" subtitle="Manage and track all bank deposits." icon={Landmark}>
-        <Button onClick={openNewDepositModal} disabled={isLoading || isSubmitting}> 
+        <Button onClick={openNewDepositModal} disabled={isLoading || isSubmitting || isFetchingDropdownData}> 
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Deposit
         </Button>
       </PageTitle>
@@ -239,7 +275,7 @@ export default function DepositsPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="currency" className="font-body">Currency</Label>
-                <Select value={currentDeposit.currency} onValueChange={handleCurrencyChange} disabled={isSubmitting}>
+                <Select value={currentDeposit.currency} onValueChange={(value) => handleSelectChange('currency', value)} disabled={isSubmitting}>
                   <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="USD">USD</SelectItem>
@@ -250,15 +286,33 @@ export default function DepositsPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="bank" className="font-body">Bank</Label>
-              <Input id="bank" name="bank" value={currentDeposit.bank || ''} onChange={handleInputChange} placeholder="e.g., Equity Bank" disabled={isSubmitting}/>
+              <Select value={currentDeposit.bank || ''} onValueChange={(value) => handleSelectChange('bank', value)} disabled={isSubmitting || isFetchingDropdownData}>
+                <SelectTrigger>
+                  <SelectValue placeholder={isFetchingDropdownData ? "Loading banks..." : "Select bank"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {banksList.length > 0 ? banksList.map(bank => (
+                    <SelectItem key={bank.id} value={bank.name}>{bank.name}</SelectItem>
+                  )) : <SelectItem value="" disabled>No banks available</SelectItem>}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="reference_no" className="font-body">Reference No.</Label>
               <Input id="reference_no" name="reference_no" value={currentDeposit.reference_no || ''} onChange={handleInputChange} placeholder="e.g., EQREF001" disabled={isSubmitting}/>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="deposited_by" className="font-body">Deposited By</Label>
-              <Input id="deposited_by" name="deposited_by" value={currentDeposit.deposited_by || ''} onChange={handleInputChange} placeholder="e.g., John Doe" disabled={isSubmitting}/>
+              <Label htmlFor="deposited_by" className="font-body">Deposited By (Customer)</Label>
+              <Select value={currentDeposit.deposited_by || ''} onValueChange={(value) => handleSelectChange('deposited_by', value)} disabled={isSubmitting || isFetchingDropdownData}>
+                <SelectTrigger>
+                  <SelectValue placeholder={isFetchingDropdownData ? "Loading customers..." : "Select customer"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {customersList.length > 0 ? customersList.map(customer => (
+                    <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>
+                  )) : <SelectItem value="" disabled>No customers available</SelectItem>}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description" className="font-body">Description (Optional)</Label>
@@ -268,7 +322,7 @@ export default function DepositsPage() {
               <DialogClose asChild>
                  <Button type="button" variant="outline" onClick={resetForm} disabled={isSubmitting}>Cancel</Button>
               </DialogClose>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || isFetchingDropdownData}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editingDeposit ? "Save Changes" : "Add Deposit"}
               </Button>
@@ -290,11 +344,28 @@ export default function DepositsPage() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow><TableHead className="font-body">Date</TableHead><TableHead className="font-body">Amount</TableHead><TableHead className="font-body">Currency</TableHead><TableHead className="font-body">Bank</TableHead><TableHead className="font-body">Reference No.</TableHead><TableHead className="font-body">Deposited By</TableHead><TableHead className="font-body">Description</TableHead><TableHead className="text-right font-body">Actions</TableHead></TableRow>
+                <TableRow>
+                  <TableHead className="font-body">Date</TableHead>
+                  <TableHead className="font-body">Amount</TableHead>
+                  <TableHead className="font-body">Currency</TableHead>
+                  <TableHead className="font-body">Bank</TableHead>
+                  <TableHead className="font-body">Reference No.</TableHead>
+                  <TableHead className="font-body">Deposited By</TableHead>
+                  <TableHead className="font-body">Description</TableHead>
+                  <TableHead className="text-right font-body">Actions</TableHead>
+                </TableRow>
               </TableHeader>
               <TableBody>
                 {deposits.length > 0 ? deposits.map((deposit) => (
-                  <TableRow key={deposit.id}><TableCell className="font-body">{format(parseISO(deposit.date), "PPP")}</TableCell><TableCell className="font-semibold font-body">{deposit.amount.toFixed(2)}</TableCell><TableCell className="font-body">{deposit.currency}</TableCell><TableCell className="font-body">{deposit.bank}</TableCell><TableCell className="font-body">{deposit.reference_no}</TableCell><TableCell className="font-body">{deposit.deposited_by}</TableCell><TableCell className="font-body">{deposit.description || 'N/A'}</TableCell><TableCell className="text-right space-x-2">
+                  <TableRow key={deposit.id}>
+                    <TableCell className="font-body">{format(parseISO(deposit.date), "PPP")}</TableCell>
+                    <TableCell className="font-semibold font-body">{deposit.amount.toFixed(2)}</TableCell>
+                    <TableCell className="font-body">{deposit.currency}</TableCell>
+                    <TableCell className="font-body">{deposit.bank}</TableCell>
+                    <TableCell className="font-body">{deposit.reference_no}</TableCell>
+                    <TableCell className="font-body">{deposit.deposited_by}</TableCell>
+                    <TableCell className="font-body">{deposit.description || 'N/A'}</TableCell>
+                    <TableCell className="text-right space-x-1">
                        <Button variant="ghost" size="icon" onClick={() => openEditModal(deposit)} title="Edit Deposit" disabled={isSubmitting}>
                          <Edit2 className="h-4 w-4" />
                        </Button>
@@ -320,9 +391,12 @@ export default function DepositsPage() {
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                    </TableCell></TableRow>
+                    </TableCell>
+                  </TableRow>
                 )) : (
-                   <TableRow><TableCell colSpan={8} className="text-center font-body h-24">No deposits recorded yet.</TableCell></TableRow>
+                   <TableRow>
+                    <TableCell colSpan={8} className="text-center font-body h-24">No deposits recorded yet.</TableCell>
+                   </TableRow>
                 )}
               </TableBody>
             </Table>
