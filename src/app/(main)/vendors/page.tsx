@@ -41,7 +41,11 @@ interface Vendor {
   address?: string;
 }
 
-const initialVendors: Vendor[] = [];
+const initialVendors: Vendor[] = [
+  { id: 'vendor1', name: 'Global Supplies Ltd.', contactPerson: 'Sarah Connor', email: 'sarah@globalsupplies.com', phone: '555-0101', address: '123 Supply Chain Rd, Metropolis' },
+  { id: 'vendor2', name: 'Tech Solutions Inc.', contactPerson: 'John Matrix', email: 'john.m@techsolutions.dev', phone: '555-0202', address: '456 Innovation Ave, Tech City' },
+  { id: 'vendor3', name: 'Fresh Produce Co.', contactPerson: 'Maria Sanchez', email: 'maria.s@freshproduce.farm', phone: '555-0303', address: '789 Farm Lane, Green Valley' },
+];
 
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>(initialVendors);
@@ -157,6 +161,7 @@ export default function VendorsPage() {
                 <TableHead className="font-body">Contact Person</TableHead>
                 <TableHead className="font-body">Email</TableHead>
                 <TableHead className="font-body">Phone</TableHead>
+                <TableHead className="font-body">Address</TableHead>
                 <TableHead className="text-right font-body">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -167,6 +172,7 @@ export default function VendorsPage() {
                   <TableCell className="font-body">{vendor.contactPerson || 'N/A'}</TableCell>
                   <TableCell className="font-body">{vendor.email || 'N/A'}</TableCell>
                   <TableCell className="font-body">{vendor.phone || 'N/A'}</TableCell>
+                  <TableCell className="font-body">{vendor.address || 'N/A'}</TableCell>
                   <TableCell className="text-right space-x-1">
                     <Button variant="ghost" size="icon" onClick={() => openEditModal(vendor)} title="Edit Vendor">
                       <Edit2 className="h-4 w-4" />
@@ -196,7 +202,7 @@ export default function VendorsPage() {
                 </TableRow>
               )) : (
                  <TableRow>
-                    <TableCell colSpan={5} className="text-center font-body h-24">No vendors registered yet.</TableCell>
+                    <TableCell colSpan={6} className="text-center font-body h-24">No vendors registered yet.</TableCell>
                  </TableRow>
               )}
             </TableBody>
