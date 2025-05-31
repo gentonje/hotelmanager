@@ -98,16 +98,26 @@ export default function TransactionsPage() {
     fetchDropdownData();
   }, []);
 
-  useEffect(() => {
+ useEffect(() => {
     const newCustomerName = searchParams.get('newCustomerName');
-    if (newCustomerName && customersList.length > 0 && selectedType === 'cash_sale') {
+    const customerOrigin = searchParams.get('newCustomerOrigin'); // Keep track of which form needed the customer
+
+    if (newCustomerName && customersList.length > 0) {
       const customerExists = customersList.find(c => c.name === newCustomerName);
       if (customerExists) {
-        setCashSaleData(prev => ({ ...prev, customer_name: newCustomerName }));
-        // Potentially re-evaluate shortfall condition if form was reset
+        if (selectedType === 'cash_sale' || customerOrigin === 'transactionShortfall') {
+          setCashSaleData(prev => ({ ...prev, customer_name: newCustomerName }));
+        } else if (selectedType === 'credit_sale' || customerOrigin === 'transactionCredit') {
+          setCreditSaleData(prev => ({ ...prev, customer_name: newCustomerName }));
+        } else if (selectedType === 'deposit' || customerOrigin === 'transactionDeposit') {
+          setDepositData(prev => ({ ...prev, deposited_by: newCustomerName }));
+        }
       }
-      // Clean up URL by removing the query parameter
-      router.replace(pathname, undefined);
+      // Clean up URL by removing the query parameters
+      const current = new URL(window.location.toString());
+      current.searchParams.delete('newCustomerName');
+      current.searchParams.delete('newCustomerOrigin');
+      router.replace(current.pathname + current.search, undefined);
     }
   }, [searchParams, customersList, selectedType, router, pathname]);
 
@@ -141,9 +151,15 @@ export default function TransactionsPage() {
   };
   
   const handleSelectChange = (form: 'cash' | 'credit' | 'deposit', field: string, value: string) => {
-    if (form === 'cash') setCashSaleData(prev => ({ ...prev, [field]: value }));
+    if (form === 'cash') setCashSaleData(prev => ({ ...prev, [field]: value === "_NONE_" ? '' : value }));
     if (form === 'credit') setCreditSaleData(prev => ({ ...prev, [field]: value }));
-    if (form === 'deposit') setDepositData(prev => ({ ...prev, [field]: value }));
+    if (form === 'deposit') {
+      if (field === 'deposited_by') {
+        setDepositData(prev => ({ ...prev, deposited_by: value }));
+      } else {
+        setDepositData(prev => ({ ...prev, [field]: value }));
+      }
+    }
   };
 
   const changeDue = useMemo(() => {
@@ -204,7 +220,7 @@ export default function TransactionsPage() {
             item_service: cashSaleData.item_service!,
             details: cashSaleData.details,
             amount: cashSaleData.amount!,
-            customer_name: cashSaleData.customer_name, // Storing customer name if provided
+            customer_name: cashSaleData.customer_name || undefined, 
           };
           const { error: insertCashError } = await supabase.from('cash_sales').insert([{ ...saleToSave, id: `cash_${Date.now()}` }]);
           error = insertCashError;
@@ -322,8 +338,9 @@ export default function TransactionsPage() {
                             <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
                         </SelectTrigger>
                         <SelectContent>
+                            {isLoading && <SelectItem value="_LOADING_CUST_SF_" disabled>Loading customers...</SelectItem>}
+                            {!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_SF_" disabled>No customers found</SelectItem>}
                             {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
-                            {customersList.length === 0 && <SelectItem value="" disabled>No customers found</SelectItem>}
                         </SelectContent>
                     </Select>
                 </div>
@@ -342,7 +359,6 @@ export default function TransactionsPage() {
               </>
             )}
 
-            {/* Optional Customer Name field for non-shortfall cash sales */}
             {!isShortfall && (
               <div className="grid gap-2">
                  <div className="flex items-center justify-between">
@@ -352,7 +368,7 @@ export default function TransactionsPage() {
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 text-primary hover:text-primary/80"
-                        onClick={() => router.push(`/customers?redirect=${pathname}&newCustomerOrigin=transactionShortfall`)} // can reuse same logic, or a different origin if needed
+                        onClick={() => router.push(`/customers?redirect=${pathname}&newCustomerOrigin=transactionShortfall`)} 
                         disabled={isSubmitting || isLoading}
                         title="Add New Customer"
                       >
@@ -364,9 +380,10 @@ export default function TransactionsPage() {
                         <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer (Optional)"} />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">None</SelectItem> 
+                        {/* No explicit "None" item with empty value. Placeholder handles it. */}
+                        {isLoading && <SelectItem value="_LOADING_CUST_OPT_" disabled>Loading customers...</SelectItem>}
+                        {!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_OPT_" disabled>No customers found</SelectItem>}
                         {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
-                        {customersList.length === 0 && <SelectItem value="" disabled>No customers found</SelectItem>}
                     </SelectContent>
                 </Select>
               </div>
@@ -409,8 +426,9 @@ export default function TransactionsPage() {
                     <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
                 </SelectTrigger>
                 <SelectContent>
+                    {isLoading && <SelectItem value="_LOADING_CUST_CREDIT_" disabled>Loading customers...</SelectItem>}
+                    {!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_CREDIT_" disabled>No customers found</SelectItem>}
                     {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
-                    {customersList.length === 0 && <SelectItem value="" disabled>No customers found</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -508,8 +526,9 @@ export default function TransactionsPage() {
                   <SelectValue placeholder={isLoading ? "Loading banks..." : "Select bank"} />
                 </SelectTrigger>
                 <SelectContent>
+                  {isLoading && <SelectItem value="_LOADING_BANKS_" disabled>Loading banks...</SelectItem>}
+                  {!isLoading && banksList.length === 0 && <SelectItem value="_EMPTY_BANKS_" disabled>No banks available</SelectItem>}
                   {banksList.map(bank => <SelectItem key={bank.id} value={bank.name}>{bank.name} ({bank.currency})</SelectItem>)}
-                  {banksList.length === 0 && <SelectItem value="" disabled>No banks available</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -537,8 +556,9 @@ export default function TransactionsPage() {
                   <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
                 </SelectTrigger>
                 <SelectContent>
+                  {isLoading && <SelectItem value="_LOADING_CUST_DEP_" disabled>Loading customers...</SelectItem>}
+                  {!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_DEP_" disabled>No customers found</SelectItem>}
                   {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
-                  {customersList.length === 0 && <SelectItem value="" disabled>No customers available</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
@@ -596,5 +616,3 @@ export default function TransactionsPage() {
     </>
   );
 }
-
-    
