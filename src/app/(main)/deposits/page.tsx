@@ -54,7 +54,7 @@ export interface Deposit {
   bank: string;
   reference_no: string;
   deposited_by: string;
-  description?: string; // Added description
+  description?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -120,14 +120,14 @@ export default function DepositsPage() {
     }
     setIsSubmitting(true);
 
-    const depositToSave = {
+    const depositToSave: Omit<Deposit, 'id' | 'created_at' | 'updated_at'> = {
       date: currentDeposit.date!.toISOString(),
       amount: currentDeposit.amount!,
       currency: currentDeposit.currency!,
       bank: currentDeposit.bank!,
       reference_no: currentDeposit.reference_no!,
       deposited_by: currentDeposit.deposited_by!,
-      description: currentDeposit.description, // Added description
+      description: currentDeposit.description,
     };
 
     let error = null;
@@ -140,7 +140,7 @@ export default function DepositsPage() {
     } else {
       const depositWithId = {
         ...depositToSave,
-        id: `dep_${Date.now()}` // Client-side ID generation
+        id: `dep_${Date.now()}`
       };
       const { error: insertError } = await supabase
         .from('deposits')
@@ -290,28 +290,11 @@ export default function DepositsPage() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="font-body">Date</TableHead>
-                  <TableHead className="font-body">Amount</TableHead>
-                  <TableHead className="font-body">Currency</TableHead>
-                  <TableHead className="font-body">Bank</TableHead>
-                  <TableHead className="font-body">Reference No.</TableHead>
-                  <TableHead className="font-body">Deposited By</TableHead>
-                  <TableHead className="font-body">Description</TableHead> {/* Added Description Header */}
-                  <TableHead className="text-right font-body">Actions</TableHead>
-                </TableRow>
+                <TableRow><TableHead className="font-body">Date</TableHead><TableHead className="font-body">Amount</TableHead><TableHead className="font-body">Currency</TableHead><TableHead className="font-body">Bank</TableHead><TableHead className="font-body">Reference No.</TableHead><TableHead className="font-body">Deposited By</TableHead><TableHead className="font-body">Description</TableHead><TableHead className="text-right font-body">Actions</TableHead></TableRow>
               </TableHeader>
               <TableBody>
                 {deposits.length > 0 ? deposits.map((deposit) => (
-                  <TableRow key={deposit.id}>
-                    <TableCell className="font-body">{format(parseISO(deposit.date), "PPP")}</TableCell>
-                    <TableCell className="font-semibold font-body">{deposit.amount.toFixed(2)}</TableCell>
-                    <TableCell className="font-body">{deposit.currency}</TableCell>
-                    <TableCell className="font-body">{deposit.bank}</TableCell>
-                    <TableCell className="font-body">{deposit.reference_no}</TableCell>
-                    <TableCell className="font-body">{deposit.deposited_by}</TableCell>
-                    <TableCell className="font-body">{deposit.description || 'N/A'}</TableCell> {/* Display Description */}
-                    <TableCell className="text-right space-x-2">
+                  <TableRow key={deposit.id}><TableCell className="font-body">{format(parseISO(deposit.date), "PPP")}</TableCell><TableCell className="font-semibold font-body">{deposit.amount.toFixed(2)}</TableCell><TableCell className="font-body">{deposit.currency}</TableCell><TableCell className="font-body">{deposit.bank}</TableCell><TableCell className="font-body">{deposit.reference_no}</TableCell><TableCell className="font-body">{deposit.deposited_by}</TableCell><TableCell className="font-body">{deposit.description || 'N/A'}</TableCell><TableCell className="text-right space-x-2">
                        <Button variant="ghost" size="icon" onClick={() => openEditModal(deposit)} title="Edit Deposit" disabled={isSubmitting}>
                          <Edit2 className="h-4 w-4" />
                        </Button>
@@ -337,12 +320,9 @@ export default function DepositsPage() {
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
-                    </TableCell>
-                  </TableRow>
+                    </TableCell></TableRow>
                 )) : (
-                   <TableRow>
-                      <TableCell colSpan={8} className="text-center font-body h-24">No deposits recorded yet.</TableCell> {/* Increased colSpan */}
-                   </TableRow>
+                   <TableRow><TableCell colSpan={8} className="text-center font-body h-24">No deposits recorded yet.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>
@@ -352,5 +332,3 @@ export default function DepositsPage() {
     </>
   );
 }
-
-    
