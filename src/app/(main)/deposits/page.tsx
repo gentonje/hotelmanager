@@ -1,7 +1,9 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +11,8 @@ import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CalendarIcon, Landmark, PlusCircle, Edit2, Trash2 } from "lucide-react";
-import { format } from "date-fns";
+import { CalendarIcon, Landmark, PlusCircle, Edit2, Trash2, Loader2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
@@ -19,7 +21,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose,
 } from "@/components/ui/dialog";
 import {
@@ -44,23 +45,49 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 type Currency = 'USD' | 'SSP';
 
-interface Deposit {
+export interface Deposit {
   id: string;
-  date: Date;
+  date: string; // Store as ISO string
   amount: number;
   currency: Currency;
   bank: string;
-  referenceNo: string;
-  depositedBy: string;
+  reference_no: string;
+  deposited_by: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
-const initialDeposits: Deposit[] = [];
+interface FormDeposit extends Omit<Deposit, 'date'> {
+  date: Date;
+}
 
 export default function DepositsPage() {
-  const [deposits, setDeposits] = useState<Deposit[]>(initialDeposits);
+  const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDeposit, setEditingDeposit] = useState<Deposit | null>(null);
-  const [currentDeposit, setCurrentDeposit] = useState<Partial<Deposit>>({ date: new Date(), currency: 'USD' });
+  const [currentDeposit, setCurrentDeposit] = useState<Partial<FormDeposit>>({ date: new Date(), currency: 'USD' });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const fetchDeposits = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('deposits')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      toast({ title: "Error fetching deposits", description: error.message, variant: "destructive" });
+    } else {
+      setDeposits(data || []);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchDeposits();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -68,69 +95,110 @@ export default function DepositsPage() {
   };
 
   const handleDateChange = (dateVal: Date | undefined) => {
-    setCurrentDeposit(prev => ({ ...prev, date: dateVal }));
+    if (dateVal) {
+      setCurrentDeposit(prev => ({ ...prev, date: dateVal }));
+    }
   };
 
   const handleCurrencyChange = (value: string) => {
     setCurrentDeposit(prev => ({ ...prev, currency: value as Currency }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!currentDeposit.date || !currentDeposit.amount || !currentDeposit.currency || !currentDeposit.bank || !currentDeposit.referenceNo || !currentDeposit.depositedBy) {
-      alert("Please fill all fields"); // Replace with a proper toast notification
-      return;
-    }
-    const newDeposit: Deposit = {
-      id: editingDeposit ? editingDeposit.id : `dep${Date.now()}`,
-      date: currentDeposit.date!,
-      amount: currentDeposit.amount!,
-      currency: currentDeposit.currency!,
-      bank: currentDeposit.bank!,
-      referenceNo: currentDeposit.referenceNo!,
-      depositedBy: currentDeposit.depositedBy!,
-    };
-
-    if (editingDeposit) {
-      setDeposits(deposits.map(d => d.id === editingDeposit.id ? newDeposit : d));
-    } else {
-      setDeposits([newDeposit, ...deposits]);
-    }
-    resetForm();
-    setIsModalOpen(false);
-  };
-
   const resetForm = () => {
     setCurrentDeposit({ date: new Date(), currency: 'USD' });
     setEditingDeposit(null);
+    setIsModalOpen(false);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentDeposit.date || !currentDeposit.amount || !currentDeposit.currency || !currentDeposit.bank || !currentDeposit.reference_no || !currentDeposit.deposited_by) {
+      toast({ title: "Missing fields", description: "Please fill all deposit fields.", variant: "destructive" });
+      return;
+    }
+    setIsSubmitting(true);
+
+    const depositToSave = {
+      date: currentDeposit.date!.toISOString(),
+      amount: currentDeposit.amount!,
+      currency: currentDeposit.currency!,
+      bank: currentDeposit.bank!,
+      reference_no: currentDeposit.reference_no!,
+      deposited_by: currentDeposit.deposited_by!,
+    };
+
+    let error = null;
+    if (editingDeposit) {
+      const { error: updateError } = await supabase
+        .from('deposits')
+        .update(depositToSave)
+        .eq('id', editingDeposit.id);
+      error = updateError;
+    } else {
+      const depositWithId = {
+        ...depositToSave,
+        id: `dep_${Date.now()}` // Client-side ID generation
+      };
+      const { error: insertError } = await supabase
+        .from('deposits')
+        .insert([depositWithId]);
+      error = insertError;
+    }
+
+    if (error) {
+      toast({ title: `Error ${editingDeposit ? "updating" : "adding"} deposit`, description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: `Deposit ${editingDeposit ? "updated" : "added"} successfully`, variant: "default" });
+      resetForm();
+      fetchDeposits();
+    }
+    setIsSubmitting(false);
   };
 
   const openEditModal = (deposit: Deposit) => {
     setEditingDeposit(deposit);
-    setCurrentDeposit(deposit);
+    setCurrentDeposit({
+      ...deposit,
+      date: deposit.date ? parseISO(deposit.date) : new Date(),
+    });
     setIsModalOpen(true);
   };
   
   const openNewDepositModal = () => {
-    resetForm();
+    resetForm(); // Ensures date is reset
+    setCurrentDeposit({ date: new Date(), currency: 'USD' }); // Explicitly set initial state for new
     setIsModalOpen(true);
   };
 
-  const handleDelete = (depositId: string) => {
-    setDeposits(deposits.filter(d => d.id !== depositId));
+  const handleDelete = async (depositId: string) => {
+    setIsSubmitting(true);
+    const { error } = await supabase
+      .from('deposits')
+      .delete()
+      .eq('id', depositId);
+
+    if (error) {
+      toast({ title: "Error deleting deposit", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Deposit deleted successfully", variant: "default" });
+      fetchDeposits();
+    }
+    setIsSubmitting(false);
   };
 
   return (
     <>
       <PageTitle title="Bank Deposits" subtitle="Manage and track all bank deposits." icon={Landmark}>
-        <Button onClick={openNewDepositModal}> 
+        <Button onClick={openNewDepositModal} disabled={isLoading || isSubmitting}> 
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Deposit
         </Button>
       </PageTitle>
 
       <Dialog open={isModalOpen} onOpenChange={(isOpen) => {
-        setIsModalOpen(isOpen);
-        if (!isOpen) resetForm();
+        if (!isSubmitting) {
+          setIsModalOpen(isOpen);
+          if (!isOpen) resetForm();
+        }
       }}>
         <DialogContent className="sm:max-w-[525px]">
           <DialogHeader>
@@ -150,6 +218,7 @@ export default function DepositsPage() {
                       "w-full justify-start text-left font-normal",
                       !currentDeposit.date && "text-muted-foreground"
                     )}
+                    disabled={isSubmitting}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {currentDeposit.date ? format(currentDeposit.date, "PPP") : <span>Pick a date</span>}
@@ -163,11 +232,11 @@ export default function DepositsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
                 <Label htmlFor="amount" className="font-body">Amount</Label>
-                <Input id="amount" name="amount" type="number" value={currentDeposit.amount || ''} onChange={handleInputChange} placeholder="e.g., 1500.00" />
+                <Input id="amount" name="amount" type="number" value={currentDeposit.amount || ''} onChange={handleInputChange} placeholder="e.g., 1500.00" disabled={isSubmitting} />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="currency" className="font-body">Currency</Label>
-                <Select value={currentDeposit.currency} onValueChange={handleCurrencyChange}>
+                <Select value={currentDeposit.currency} onValueChange={handleCurrencyChange} disabled={isSubmitting}>
                   <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="USD">USD</SelectItem>
@@ -178,21 +247,24 @@ export default function DepositsPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="bank" className="font-body">Bank</Label>
-              <Input id="bank" name="bank" value={currentDeposit.bank || ''} onChange={handleInputChange} placeholder="e.g., Equity Bank" />
+              <Input id="bank" name="bank" value={currentDeposit.bank || ''} onChange={handleInputChange} placeholder="e.g., Equity Bank" disabled={isSubmitting}/>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="referenceNo" className="font-body">Reference No.</Label>
-              <Input id="referenceNo" name="referenceNo" value={currentDeposit.referenceNo || ''} onChange={handleInputChange} placeholder="e.g., EQREF001" />
+              <Label htmlFor="reference_no" className="font-body">Reference No.</Label>
+              <Input id="reference_no" name="reference_no" value={currentDeposit.reference_no || ''} onChange={handleInputChange} placeholder="e.g., EQREF001" disabled={isSubmitting}/>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="depositedBy" className="font-body">Deposited By</Label>
-              <Input id="depositedBy" name="depositedBy" value={currentDeposit.depositedBy || ''} onChange={handleInputChange} placeholder="e.g., John Doe" />
+              <Label htmlFor="deposited_by" className="font-body">Deposited By</Label>
+              <Input id="deposited_by" name="deposited_by" value={currentDeposit.deposited_by || ''} onChange={handleInputChange} placeholder="e.g., John Doe" disabled={isSubmitting}/>
             </div>
             <DialogFooter>
               <DialogClose asChild>
-                 <Button type="button" variant="outline" onClick={() => { setIsModalOpen(false); resetForm();}}>Cancel</Button>
+                 <Button type="button" variant="outline" onClick={resetForm} disabled={isSubmitting}>Cancel</Button>
               </DialogClose>
-              <Button type="submit">{editingDeposit ? "Save Changes" : "Add Deposit"}</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editingDeposit ? "Save Changes" : "Add Deposit"}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -204,61 +276,68 @@ export default function DepositsPage() {
           <CardDescription className="font-body">A log of all recorded bank deposits.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-body">Date</TableHead>
-                <TableHead className="font-body">Amount</TableHead>
-                <TableHead className="font-body">Currency</TableHead>
-                <TableHead className="font-body">Bank</TableHead>
-                <TableHead className="font-body">Reference No.</TableHead>
-                <TableHead className="font-body">Deposited By</TableHead>
-                <TableHead className="text-right font-body">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deposits.length > 0 ? deposits.map((deposit) => (
-                <TableRow key={deposit.id}>
-                  <TableCell className="font-body">{format(deposit.date, "PPP")}</TableCell>
-                  <TableCell className="font-semibold font-body">{deposit.amount.toFixed(2)}</TableCell>
-                  <TableCell className="font-body">{deposit.currency}</TableCell>
-                  <TableCell className="font-body">{deposit.bank}</TableCell>
-                  <TableCell className="font-body">{deposit.referenceNo}</TableCell>
-                  <TableCell className="font-body">{deposit.depositedBy}</TableCell>
-                  <TableCell className="text-right space-x-2">
-                     <Button variant="ghost" size="icon" onClick={() => openEditModal(deposit)} title="Edit Deposit">
-                       <Edit2 className="h-4 w-4" />
-                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete Deposit">
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="font-headline">Are you sure?</AlertDialogTitle>
-                          <AlertDialogDescription className="font-body">
-                            This action cannot be undone. This will permanently delete the deposit record.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(deposit.id)} className="bg-destructive hover:bg-destructive/90">
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </TableCell>
+          {isLoading ? (
+             <div className="flex justify-center items-center h-24">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="font-body">Date</TableHead>
+                  <TableHead className="font-body">Amount</TableHead>
+                  <TableHead className="font-body">Currency</TableHead>
+                  <TableHead className="font-body">Bank</TableHead>
+                  <TableHead className="font-body">Reference No.</TableHead>
+                  <TableHead className="font-body">Deposited By</TableHead>
+                  <TableHead className="text-right font-body">Actions</TableHead>
                 </TableRow>
-              )) : (
-                 <TableRow>
-                    <TableCell colSpan={7} className="text-center font-body h-24">No deposits recorded yet.</TableCell>
-                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {deposits.length > 0 ? deposits.map((deposit) => (
+                  <TableRow key={deposit.id}>
+                    <TableCell className="font-body">{format(parseISO(deposit.date), "PPP")}</TableCell>
+                    <TableCell className="font-semibold font-body">{deposit.amount.toFixed(2)}</TableCell>
+                    <TableCell className="font-body">{deposit.currency}</TableCell>
+                    <TableCell className="font-body">{deposit.bank}</TableCell>
+                    <TableCell className="font-body">{deposit.reference_no}</TableCell>
+                    <TableCell className="font-body">{deposit.deposited_by}</TableCell>
+                    <TableCell className="text-right space-x-2">
+                       <Button variant="ghost" size="icon" onClick={() => openEditModal(deposit)} title="Edit Deposit" disabled={isSubmitting}>
+                         <Edit2 className="h-4 w-4" />
+                       </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete Deposit" disabled={isSubmitting}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="font-headline">Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription className="font-body">
+                              This action cannot be undone. This will permanently delete the deposit record.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(deposit.id)} className="bg-destructive hover:bg-destructive/90" disabled={isSubmitting}>
+                              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                )) : (
+                   <TableRow>
+                      <TableCell colSpan={7} className="text-center font-body h-24">No deposits recorded yet.</TableCell>
+                   </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </>

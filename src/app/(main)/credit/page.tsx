@@ -1,7 +1,9 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,8 +20,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarIcon, CreditCard, PlusCircle, Edit2, Trash2, CheckCircle2 } from "lucide-react";
-import { format } from "date-fns";
+import { CalendarIcon, CreditCard, PlusCircle, Edit2, Trash2, CheckCircle2, Loader2 } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
@@ -29,7 +31,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
   DialogClose
 } from "@/components/ui/dialog";
 import {
@@ -46,31 +47,59 @@ import {
 
 type CreditStatus = 'Pending' | 'Paid' | 'Overdue';
 
-interface CreditSale {
+export interface CreditSale {
   id: string;
-  customerName: string;
-  itemService: string;
+  customer_name: string;
+  item_service: string;
   details?: string;
   amount: number;
-  date: Date;
-  dueDate?: Date;
+  date: string; // Store as ISO string
+  due_date?: string; // Store as ISO string
   status: CreditStatus;
+  created_at?: string;
+  updated_at?: string;
 }
 
-const initialCreditSales: CreditSale[] = [];
+interface FormCreditSale extends Omit<CreditSale, 'date' | 'due_date'> {
+  date: Date;
+  due_date?: Date;
+}
+
 
 export default function CreditPage() {
-  const [creditSales, setCreditSales] = useState<CreditSale[]>(initialCreditSales);
+  const [creditSales, setCreditSales] = useState<CreditSale[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<CreditSale | null>(null);
-  const [currentSale, setCurrentSale] = useState<Partial<CreditSale>>({ date: new Date(), status: 'Pending' });
+  const [currentSale, setCurrentSale] = useState<Partial<FormCreditSale>>({ date: new Date(), status: 'Pending' });
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const fetchCreditSales = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('credit_sales')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast({ title: "Error fetching credit sales", description: error.message, variant: "destructive" });
+    } else {
+      setCreditSales(data || []);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchCreditSales();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setCurrentSale(prev => ({ ...prev, [name]: name === 'amount' ? parseFloat(value) || 0 : value }));
   };
   
-  const handleDateChange = (field: 'date' | 'dueDate', dateVal: Date | undefined) => {
+  const handleDateChange = (field: 'date' | 'due_date', dateVal: Date | undefined) => {
     setCurrentSale(prev => ({ ...prev, [field]: dateVal }));
   };
 
@@ -78,38 +107,66 @@ export default function CreditPage() {
     setCurrentSale(prev => ({ ...prev, status: value as CreditStatus }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const resetForm = () => {
+    setEditingSale(null);
+    setCurrentSale({ date: new Date(), status: 'Pending' });
+    setIsModalOpen(false);
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentSale.customerName || !currentSale.itemService || !currentSale.amount || !currentSale.date) {
-      alert("Please fill all required fields"); // Replace with toast
+    if (!currentSale.customer_name || !currentSale.item_service || !currentSale.amount || !currentSale.date) {
+      toast({ title: "Missing fields", description: "Please fill all required fields for the credit sale.", variant: "destructive" });
       return;
     }
+    setIsSubmitting(true);
 
-    const saleToSave: CreditSale = {
-      id: editingSale ? editingSale.id : `cred${Date.now()}`,
-      customerName: currentSale.customerName!,
-      itemService: currentSale.itemService!,
+    const saleToSave = {
+      customer_name: currentSale.customer_name!,
+      item_service: currentSale.item_service!,
       details: currentSale.details,
       amount: currentSale.amount!,
-      date: currentSale.date!,
-      dueDate: currentSale.dueDate,
+      date: currentSale.date!.toISOString(),
+      due_date: currentSale.due_date ? currentSale.due_date.toISOString() : undefined,
       status: currentSale.status || 'Pending',
     };
 
+    let error = null;
+
     if (editingSale) {
-      setCreditSales(creditSales.map(s => s.id === editingSale.id ? saleToSave : s));
+      const { error: updateError } = await supabase
+        .from('credit_sales')
+        .update(saleToSave)
+        .eq('id', editingSale.id);
+      error = updateError;
     } else {
-      setCreditSales([saleToSave, ...creditSales]);
+      const saleWithId = {
+        ...saleToSave,
+        id: `cred_${Date.now()}` // Client-side ID generation
+      };
+      const { error: insertError } = await supabase
+        .from('credit_sales')
+        .insert([saleWithId]);
+      error = insertError;
     }
-    
-    setIsModalOpen(false);
-    setEditingSale(null);
-    setCurrentSale({ date: new Date(), status: 'Pending' });
+
+    if (error) {
+      toast({ title: `Error ${editingSale ? 'updating' : 'adding'} credit sale`, description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: `Credit Sale ${editingSale ? 'updated' : 'added'} successfully`, variant: "default" });
+      resetForm();
+      fetchCreditSales();
+    }
+    setIsSubmitting(false);
   };
 
   const openEditModal = (sale: CreditSale) => {
     setEditingSale(sale);
-    setCurrentSale(sale);
+    setCurrentSale({
+      ...sale,
+      date: sale.date ? parseISO(sale.date) : new Date(),
+      due_date: sale.due_date ? parseISO(sale.due_date) : undefined,
+    });
     setIsModalOpen(true);
   };
 
@@ -119,12 +176,36 @@ export default function CreditPage() {
     setIsModalOpen(true);
   };
   
-  const handleDeleteSale = (saleId: string) => {
-    setCreditSales(creditSales.filter(s => s.id !== saleId));
+  const handleDeleteSale = async (saleId: string) => {
+    setIsSubmitting(true);
+    const { error } = await supabase
+      .from('credit_sales')
+      .delete()
+      .eq('id', saleId);
+
+    if (error) {
+      toast({ title: "Error deleting credit sale", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Credit sale deleted successfully", variant: "default" });
+      fetchCreditSales();
+    }
+    setIsSubmitting(false);
   };
 
-  const markAsPaid = (saleId: string) => {
-    setCreditSales(creditSales.map(s => s.id === saleId ? {...s, status: 'Paid'} : s));
+  const markAsPaid = async (saleId: string) => {
+    setIsSubmitting(true);
+    const { error } = await supabase
+      .from('credit_sales')
+      .update({ status: 'Paid' })
+      .eq('id', saleId);
+
+    if (error) {
+      toast({ title: "Error marking sale as paid", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Sale marked as paid", variant: "default" });
+      fetchCreditSales();
+    }
+    setIsSubmitting(false);
   };
 
   const getStatusBadgeVariant = (status: CreditStatus) => {
@@ -136,16 +217,15 @@ export default function CreditPage() {
     }
   };
 
-
   return (
     <>
       <PageTitle title="Credit Management" subtitle="Track and manage items/services sold on credit." icon={CreditCard}>
-        <Button onClick={openNewSaleModal}>
+        <Button onClick={openNewSaleModal} disabled={isLoading || isSubmitting}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add New Credit Sale
         </Button>
       </PageTitle>
 
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+      <Dialog open={isModalOpen} onOpenChange={(isOpen) => { if (!isSubmitting) setIsModalOpen(isOpen); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-headline">{editingSale ? 'Edit Credit Sale' : 'Add New Credit Sale'}</DialogTitle>
@@ -155,25 +235,25 @@ export default function CreditPage() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="customerName" className="font-body">Customer Name</Label>
-              <Input id="customerName" name="customerName" value={currentSale.customerName || ''} onChange={handleInputChange} required />
+              <Label htmlFor="customer_name" className="font-body">Customer Name</Label>
+              <Input id="customer_name" name="customer_name" value={currentSale.customer_name || ''} onChange={handleInputChange} required disabled={isSubmitting} />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="itemService" className="font-body">Item/Service Sold</Label>
-              <Input id="itemService" name="itemService" value={currentSale.itemService || ''} onChange={handleInputChange} required />
+              <Label htmlFor="item_service" className="font-body">Item/Service Sold</Label>
+              <Input id="item_service" name="item_service" value={currentSale.item_service || ''} onChange={handleInputChange} required disabled={isSubmitting}/>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="details" className="font-body">Details (Optional)</Label>
-              <Textarea id="details" name="details" value={currentSale.details || ''} onChange={handleInputChange} />
+              <Textarea id="details" name="details" value={currentSale.details || ''} onChange={handleInputChange} disabled={isSubmitting}/>
             </div>
              <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="amount" className="font-body">Amount</Label>
-                    <Input id="amount" name="amount" type="number" value={currentSale.amount || ''} onChange={handleInputChange} required />
+                    <Input id="amount" name="amount" type="number" value={currentSale.amount || ''} onChange={handleInputChange} required disabled={isSubmitting}/>
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="status" className="font-body">Status</Label>
-                    <Select value={currentSale.status} onValueChange={handleStatusChange}>
+                    <Select value={currentSale.status} onValueChange={handleStatusChange} disabled={isSubmitting}>
                         <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                         <SelectContent>
                         <SelectItem value="Pending">Pending</SelectItem>
@@ -188,7 +268,7 @@ export default function CreditPage() {
                 <Label htmlFor="date" className="font-body">Transaction Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !currentSale.date && "text-muted-foreground")}>
+                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !currentSale.date && "text-muted-foreground")} disabled={isSubmitting}>
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {currentSale.date ? format(currentSale.date, "PPP") : <span>Pick a date</span>}
                     </Button>
@@ -197,21 +277,24 @@ export default function CreditPage() {
                 </Popover>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="dueDate" className="font-body">Due Date (Optional)</Label>
+                <Label htmlFor="due_date" className="font-body">Due Date (Optional)</Label>
                  <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !currentSale.dueDate && "text-muted-foreground")}>
+                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !currentSale.due_date && "text-muted-foreground")} disabled={isSubmitting}>
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {currentSale.dueDate ? format(currentSale.dueDate, "PPP") : <span>Pick a date</span>}
+                      {currentSale.due_date ? format(currentSale.due_date, "PPP") : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={currentSale.dueDate} onSelect={(d) => handleDateChange('dueDate',d)} /></PopoverContent>
+                  <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={currentSale.due_date} onSelect={(d) => handleDateChange('due_date',d)} /></PopoverContent>
                 </Popover>
               </div>
             </div>
             <DialogFooter>
-              <DialogClose asChild><Button type="button" variant="outline" onClick={() => {setIsModalOpen(false); setEditingSale(null); setCurrentSale({date: new Date(), status:'Pending'}); }}>Cancel</Button></DialogClose>
-              <Button type="submit">{editingSale ? 'Save Changes' : 'Add Sale'}</Button>
+              <DialogClose asChild><Button type="button" variant="outline" onClick={resetForm} disabled={isSubmitting}>Cancel</Button></DialogClose>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editingSale ? 'Save Changes' : 'Add Sale'}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -223,66 +306,73 @@ export default function CreditPage() {
            <CardDescription className="font-body">Log of all credit transactions and their payment status.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="font-body">Customer</TableHead>
-                <TableHead className="font-body">Item/Service</TableHead>
-                <TableHead className="font-body">Amount</TableHead>
-                <TableHead className="font-body">Date</TableHead>
-                <TableHead className="font-body">Due Date</TableHead>
-                <TableHead className="font-body">Status</TableHead>
-                <TableHead className="text-right font-body">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {creditSales.length > 0 ? creditSales.map((sale) => (
-                <TableRow key={sale.id}>
-                  <TableCell className="font-semibold font-body">{sale.customerName}</TableCell>
-                  <TableCell className="font-body">{sale.itemService}</TableCell>
-                  <TableCell className="font-body">${sale.amount.toFixed(2)}</TableCell>
-                  <TableCell className="font-body">{format(sale.date, "PP")}</TableCell>
-                  <TableCell className="font-body">{sale.dueDate ? format(sale.dueDate, "PP") : 'N/A'}</TableCell>
-                  <TableCell><Badge variant={getStatusBadgeVariant(sale.status)} className="font-body">{sale.status}</Badge></TableCell>
-                  <TableCell className="text-right space-x-1">
-                    {sale.status !== 'Paid' && (
-                      <Button variant="ghost" size="icon" onClick={() => markAsPaid(sale.id)} title="Mark as Paid">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                      </Button>
-                    )}
-                    <Button variant="ghost" size="icon" onClick={() => openEditModal(sale)} title="Edit Sale">
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                         <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete Sale">
-                           <Trash2 className="h-4 w-4" />
-                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="font-headline">Delete Credit Sale?</AlertDialogTitle>
-                          <AlertDialogDescription className="font-body">
-                            Are you sure you want to delete this credit sale for "{sale.customerName}"? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDeleteSale(sale.id)} className="bg-destructive hover:bg-destructive/90">
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </TableCell>
+          {isLoading ? (
+            <div className="flex justify-center items-center h-24">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="font-body">Customer</TableHead>
+                  <TableHead className="font-body">Item/Service</TableHead>
+                  <TableHead className="font-body">Amount</TableHead>
+                  <TableHead className="font-body">Date</TableHead>
+                  <TableHead className="font-body">Due Date</TableHead>
+                  <TableHead className="font-body">Status</TableHead>
+                  <TableHead className="text-right font-body">Actions</TableHead>
                 </TableRow>
-              )) : (
-                 <TableRow>
-                    <TableCell colSpan={7} className="text-center font-body h-24">No credit sales recorded yet.</TableCell>
-                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {creditSales.length > 0 ? creditSales.map((sale) => (
+                  <TableRow key={sale.id}>
+                    <TableCell className="font-semibold font-body">{sale.customer_name}</TableCell>
+                    <TableCell className="font-body">{sale.item_service}</TableCell>
+                    <TableCell className="font-body">${sale.amount.toFixed(2)}</TableCell>
+                    <TableCell className="font-body">{format(parseISO(sale.date), "PP")}</TableCell>
+                    <TableCell className="font-body">{sale.due_date ? format(parseISO(sale.due_date), "PP") : 'N/A'}</TableCell>
+                    <TableCell><Badge variant={getStatusBadgeVariant(sale.status)} className="font-body">{sale.status}</Badge></TableCell>
+                    <TableCell className="text-right space-x-1">
+                      {sale.status !== 'Paid' && (
+                        <Button variant="ghost" size="icon" onClick={() => markAsPaid(sale.id)} title="Mark as Paid" disabled={isSubmitting}>
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" onClick={() => openEditModal(sale)} title="Edit Sale" disabled={isSubmitting}>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                           <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete Sale" disabled={isSubmitting}>
+                             <Trash2 className="h-4 w-4" />
+                           </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="font-headline">Delete Credit Sale?</AlertDialogTitle>
+                            <AlertDialogDescription className="font-body">
+                              Are you sure you want to delete this credit sale for "{sale.customer_name}"? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDeleteSale(sale.id)} className="bg-destructive hover:bg-destructive/90" disabled={isSubmitting}>
+                              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </TableCell>
+                  </TableRow>
+                )) : (
+                   <TableRow>
+                      <TableCell colSpan={7} className="text-center font-body h-24">No credit sales recorded yet.</TableCell>
+                   </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </>
