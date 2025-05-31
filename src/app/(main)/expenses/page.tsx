@@ -56,12 +56,7 @@ interface Expense {
   paidTo?: string;
 }
 
-const initialExpenses: Expense[] = [
-  { id: 'exp1', date: new Date(2024, 6, 18), category: 'Staff Salaries', description: 'June salaries - Kitchen Staff', amount: 2500, paidTo: 'Staff Payroll' },
-  { id: 'exp2', date: new Date(2024, 6, 15), category: 'Taxes', description: 'VAT Payment Q2', amount: 1200, paidTo: 'Revenue Authority' },
-  { id: 'exp3', date: new Date(2024, 6, 12), category: 'Utilities', description: 'Electricity Bill - June', amount: 350, paidTo: 'Power Company' },
-  { id: 'exp4', date: new Date(2024, 6, 10), category: 'Supplies', description: 'Fresh produce for restaurant', amount: 450, paidTo: 'GreenGrocers Ltd.' },
-];
+const initialExpenses: Expense[] = [];
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
@@ -200,7 +195,7 @@ export default function ExpensesPage() {
           <TabsTrigger value="Staff Salaries" className="font-body">Staff Salaries</TabsTrigger>
           <TabsTrigger value="Taxes" className="font-body">Taxes</TabsTrigger>
           <TabsTrigger value="Utilities" className="font-body">Utilities</TabsTrigger>
-          <TabsTrigger value="Supplies" className="font-body">Supplies</Other</TabsTrigger>
+          <TabsTrigger value="Supplies" className="font-body">Supplies</TabsTrigger>
           <TabsTrigger value="Other" className="font-body">Other</TabsTrigger>
         </TabsList>
 

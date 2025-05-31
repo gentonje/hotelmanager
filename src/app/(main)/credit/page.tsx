@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -57,11 +57,7 @@ interface CreditSale {
   status: CreditStatus;
 }
 
-const initialCreditSales: CreditSale[] = [
-  { id: 'cred1', customerName: 'Alice Wonderland', itemService: 'Room 201 - 3 Nights', amount: 450, date: new Date(2024, 6, 15), dueDate: new Date(2024, 6, 22), status: 'Pending' },
-  { id: 'cred2', customerName: 'Bob The Builder', itemService: 'Conference Hall A - Full Day', amount: 300, date: new Date(2024, 6, 10), dueDate: new Date(2024, 6, 17), status: 'Paid' },
-  { id: 'cred3', customerName: 'Charlie Brown', itemService: 'Restaurant - Group Dinner', amount: 180, date: new Date(2024, 5, 20), dueDate: new Date(2024, 5, 27), status: 'Overdue' },
-];
+const initialCreditSales: CreditSale[] = [];
 
 export default function CreditPage() {
   const [creditSales, setCreditSales] = useState<CreditSale[]>(initialCreditSales);
@@ -133,7 +129,7 @@ export default function CreditPage() {
 
   const getStatusBadgeVariant = (status: CreditStatus) => {
     switch (status) {
-      case 'Paid': return 'default'; // default is usually primary
+      case 'Paid': return 'default'; 
       case 'Pending': return 'secondary';
       case 'Overdue': return 'destructive';
       default: return 'outline';
