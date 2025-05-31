@@ -25,7 +25,7 @@ export default function MainAppLayout({
         <SidebarHeader className="p-4 flex items-center justify-between">
            <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden">
              <Hotel className="h-8 w-8 text-primary" />
-             <span className="font-headline text-2xl font-semibold">HotelFlow</span>
+             <span className="font-headline text-2xl font-semibold">TORIT HOTEL</span>
            </div>
            <SidebarTrigger className="hidden md:flex" />
         </SidebarHeader>
