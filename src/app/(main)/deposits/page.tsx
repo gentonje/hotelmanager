@@ -8,6 +8,7 @@ import { PageTitle } from "@/components/shared/page-title";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -53,6 +54,7 @@ export interface Deposit {
   bank: string;
   reference_no: string;
   deposited_by: string;
+  description?: string; // Added description
   created_at?: string;
   updated_at?: string;
 }
@@ -89,7 +91,7 @@ export default function DepositsPage() {
     fetchDeposits();
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setCurrentDeposit(prev => ({ ...prev, [name]: name === 'amount' ? parseFloat(value) || 0 : value }));
   };
@@ -105,7 +107,7 @@ export default function DepositsPage() {
   };
 
   const resetForm = () => {
-    setCurrentDeposit({ date: new Date(), currency: 'USD' });
+    setCurrentDeposit({ date: new Date(), currency: 'USD', description: '' });
     setEditingDeposit(null);
     setIsModalOpen(false);
   };
@@ -113,7 +115,7 @@ export default function DepositsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentDeposit.date || !currentDeposit.amount || !currentDeposit.currency || !currentDeposit.bank || !currentDeposit.reference_no || !currentDeposit.deposited_by) {
-      toast({ title: "Missing fields", description: "Please fill all deposit fields.", variant: "destructive" });
+      toast({ title: "Missing fields", description: "Please fill all required deposit fields.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -125,6 +127,7 @@ export default function DepositsPage() {
       bank: currentDeposit.bank!,
       reference_no: currentDeposit.reference_no!,
       deposited_by: currentDeposit.deposited_by!,
+      description: currentDeposit.description, // Added description
     };
 
     let error = null;
@@ -165,8 +168,8 @@ export default function DepositsPage() {
   };
   
   const openNewDepositModal = () => {
-    resetForm(); // Ensures date is reset
-    setCurrentDeposit({ date: new Date(), currency: 'USD' }); // Explicitly set initial state for new
+    resetForm(); 
+    setCurrentDeposit({ date: new Date(), currency: 'USD', description: '' }); 
     setIsModalOpen(true);
   };
 
@@ -257,6 +260,10 @@ export default function DepositsPage() {
               <Label htmlFor="deposited_by" className="font-body">Deposited By</Label>
               <Input id="deposited_by" name="deposited_by" value={currentDeposit.deposited_by || ''} onChange={handleInputChange} placeholder="e.g., John Doe" disabled={isSubmitting}/>
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description" className="font-body">Description (Optional)</Label>
+              <Textarea id="description" name="description" value={currentDeposit.description || ''} onChange={handleInputChange} placeholder="e.g., Monthly salary deposit" disabled={isSubmitting}/>
+            </div>
             <DialogFooter>
               <DialogClose asChild>
                  <Button type="button" variant="outline" onClick={resetForm} disabled={isSubmitting}>Cancel</Button>
@@ -290,6 +297,7 @@ export default function DepositsPage() {
                   <TableHead className="font-body">Bank</TableHead>
                   <TableHead className="font-body">Reference No.</TableHead>
                   <TableHead className="font-body">Deposited By</TableHead>
+                  <TableHead className="font-body">Description</TableHead> {/* Added Description Header */}
                   <TableHead className="text-right font-body">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -302,6 +310,7 @@ export default function DepositsPage() {
                     <TableCell className="font-body">{deposit.bank}</TableCell>
                     <TableCell className="font-body">{deposit.reference_no}</TableCell>
                     <TableCell className="font-body">{deposit.deposited_by}</TableCell>
+                    <TableCell className="font-body">{deposit.description || 'N/A'}</TableCell> {/* Display Description */}
                     <TableCell className="text-right space-x-2">
                        <Button variant="ghost" size="icon" onClick={() => openEditModal(deposit)} title="Edit Deposit" disabled={isSubmitting}>
                          <Edit2 className="h-4 w-4" />
@@ -332,7 +341,7 @@ export default function DepositsPage() {
                   </TableRow>
                 )) : (
                    <TableRow>
-                      <TableCell colSpan={7} className="text-center font-body h-24">No deposits recorded yet.</TableCell>
+                      <TableCell colSpan={8} className="text-center font-body h-24">No deposits recorded yet.</TableCell> {/* Increased colSpan */}
                    </TableRow>
                 )}
               </TableBody>
@@ -343,3 +352,5 @@ export default function DepositsPage() {
     </>
   );
 }
+
+    
