@@ -12,6 +12,8 @@ import {
   Settings,
   BarChart3,
   Hotel,
+  Users,
+  Truck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -27,6 +29,8 @@ const navItems = [
   { href: "/inventory", label: "Inventory", icon: Archive },
   { href: "/credit", label: "Credit Sales", icon: CreditCard },
   { href: "/expenses", label: "Expenses", icon: Receipt },
+  { href: "/vendors", label: "Vendors", icon: Truck },
+  { href: "/customers", label: "Customers", icon: Users },
   // Future sections
   // { href: "/reports", label: "Reports", icon: BarChart3 },
   // { href: "/settings", label: "Settings", icon: Settings },
@@ -64,4 +68,3 @@ export function SidebarNav() {
     </SidebarMenu>
   );
 }
-
