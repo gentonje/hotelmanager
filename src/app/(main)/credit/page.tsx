@@ -279,8 +279,8 @@ export default function CreditPage() {
           item_service: `Payment for Credit: ${saleForPayment.item_service} (ID: ${saleForPayment.id})`,
           details: `Customer: ${saleForPayment.customer_name}`,
           amount: saleForPayment.amount,
+          currency: saleForPayment.currency, // Record currency for cash payment
           customer_name: saleForPayment.customer_name,
-          // Cash sales table does not have currency. Assumes base currency.
         };
         const { error: cashError } = await supabase.from('cash_sales').insert([cashSaleRecord]);
         if (cashError) throw cashError;
@@ -363,7 +363,7 @@ export default function CreditPage() {
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="currency" className="font-body">Currency</Label>
-                    <Select value={currentSale.currency} onValueChange={handleCurrencyChange} disabled={isSubmitting}>
+                    <Select value={currentSale.currency || 'USD'} onValueChange={handleCurrencyChange} disabled={isSubmitting}>
                         <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
                         <SelectContent>
                         <SelectItem value="USD">USD</SelectItem>
@@ -373,7 +373,7 @@ export default function CreditPage() {
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="status" className="font-body">Status</Label>
-                    <Select value={currentSale.status} onValueChange={handleStatusChange} disabled={isSubmitting}>
+                    <Select value={currentSale.status || 'Pending'} onValueChange={handleStatusChange} disabled={isSubmitting}>
                         <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                         <SelectContent>
                         <SelectItem value="Pending">Pending</SelectItem>
@@ -569,6 +569,3 @@ export default function CreditPage() {
     </>
   );
 }
-
-
-    

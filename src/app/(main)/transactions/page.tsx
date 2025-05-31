@@ -28,8 +28,6 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 // Import existing interfaces
 import type { Bank } from '@/app/(main)/banks/page';
 import type { Customer } from '@/app/(main)/customers/page';
-// Make CreditSale interface directly available or redefine minimally for transactions
-// import type { CreditSale, CreditStatus } from '@/app/(main)/credit/page'; 
 import type { Deposit } from '@/app/(main)/deposits/page';
 
 type TransactionType = 'cash_sale' | 'credit_sale' | 'deposit' | '';
@@ -43,7 +41,7 @@ interface TransactionCreditSale {
   item_service: string;
   details?: string;
   amount: number;
-  currency: Currency; // Added currency
+  currency: Currency;
   date: string; // ISO string
   due_date?: string; // ISO string
   status: CreditStatus;
@@ -57,6 +55,7 @@ export interface CashSale {
   item_service: string;
   details?: string;
   amount: number;
+  currency: Currency; // Added currency
   customer_name?: string; // Optional customer name for cash sales
   created_at?: string;
   updated_at?: string;
@@ -91,7 +90,7 @@ export default function TransactionsPage() {
   const [banksList, setBanksList] = useState<Pick<Bank, 'id' | 'name' | 'currency'>[]>([]);
 
   // Form states
-  const [cashSaleData, setCashSaleData] = useState<Partial<FormCashSale>>({ date: new Date(), amount: 0 });
+  const [cashSaleData, setCashSaleData] = useState<Partial<FormCashSale>>({ date: new Date(), amount: 0, currency: 'USD' });
   const [creditSaleData, setCreditSaleData] = useState<Partial<FormCreditSaleState>>({ date: new Date(), status: 'Pending', amount: 0, currency: 'USD' });
   const [depositData, setDepositData] = useState<Partial<FormDepositState>>({ date: new Date(), currency: 'USD', amount: 0 });
   
@@ -140,7 +139,7 @@ export default function TransactionsPage() {
 
 
   const resetAllForms = () => {
-    setCashSaleData({ date: new Date(), amount: 0, item_service: '', details: '', customer_name: '', amount_tendered: undefined, due_date_for_balance: undefined });
+    setCashSaleData({ date: new Date(), amount: 0, currency: 'USD', item_service: '', details: '', customer_name: '', amount_tendered: undefined, due_date_for_balance: undefined });
     setCreditSaleData({ date: new Date(), status: 'Pending', amount: 0, currency: 'USD', customer_name: '', item_service: '', details: '' });
     setDepositData({ date: new Date(), currency: 'USD', amount: 0, bank: '', reference_no: '', deposited_by: '', description: '' });
   };
@@ -168,7 +167,7 @@ export default function TransactionsPage() {
   };
   
   const handleSelectChange = (form: 'cash' | 'credit' | 'deposit', field: string, value: string) => {
-    if (form === 'cash') setCashSaleData(prev => ({ ...prev, [field]: value === "_NONE_" ? '' : value }));
+    if (form === 'cash') setCashSaleData(prev => ({ ...prev, [field]: field === 'currency' ? value as Currency : (value === "_NONE_" ? '' : value) }));
     if (form === 'credit') setCreditSaleData(prev => ({ ...prev, [field]: value }));
     if (form === 'deposit') {
       if (field === 'deposited_by') {
@@ -197,8 +196,8 @@ export default function TransactionsPage() {
 
     try {
       if (selectedType === 'cash_sale') {
-        if (!cashSaleData.date || !cashSaleData.item_service || cashSaleData.amount === undefined || cashSaleData.amount <= 0) {
-          toast({ title: "Missing fields", description: "Date, Item/Service, and a valid Amount are required for cash sale.", variant: "destructive" });
+        if (!cashSaleData.date || !cashSaleData.item_service || cashSaleData.amount === undefined || cashSaleData.amount <= 0 || !cashSaleData.currency) {
+          toast({ title: "Missing fields", description: "Date, Item/Service, Currency, and a valid Amount are required for cash sale.", variant: "destructive" });
           setIsSubmitting(false); return;
         }
 
@@ -213,16 +212,14 @@ export default function TransactionsPage() {
           }
 
           const creditAmount = cashSaleData.amount! - (cashSaleData.amount_tendered || 0);
-          const creditDetails = `Original Item: ${cashSaleData.item_service}. Sale Amount: ${cashSaleData.amount}. Tendered: ${cashSaleData.amount_tendered || 0}. Balance Due: ${creditAmount.toFixed(2)}. Notes: ${cashSaleData.details || ''}`;
+          const creditDetails = `Original Item: ${cashSaleData.item_service}. Sale Amount: ${cashSaleData.currency} ${cashSaleData.amount}. Tendered: ${cashSaleData.currency} ${cashSaleData.amount_tendered || 0}. Balance Due: ${cashSaleData.currency} ${creditAmount.toFixed(2)}. Notes: ${cashSaleData.details || ''}`;
           
-          // Assume default currency 'USD' for shortfall credit for now
-          // Ideally, cash sale should also have a currency if it's multi-currency
           const creditToSave: Omit<TransactionCreditSale, 'id' | 'created_at' | 'updated_at'> = {
             customer_name: cashSaleData.customer_name!,
             item_service: "Balance from Cash Sale",
             details: creditDetails,
             amount: creditAmount,
-            currency: 'USD', // Defaulting or could be from a cash sale currency field if added
+            currency: cashSaleData.currency!, 
             date: cashSaleData.date.toISOString(),
             due_date: cashSaleData.due_date_for_balance.toISOString(),
             status: 'Pending',
@@ -240,6 +237,7 @@ export default function TransactionsPage() {
             item_service: cashSaleData.item_service!,
             details: cashSaleData.details,
             amount: cashSaleData.amount!,
+            currency: cashSaleData.currency!,
             customer_name: cashSaleData.customer_name || undefined, 
           };
           const { error: insertCashError } = await supabase.from('cash_sales').insert([{ ...saleToSave, id: `cash_${Date.now()}` }]);
@@ -326,10 +324,20 @@ export default function TransactionsPage() {
               <Label htmlFor="cash_details">Details (Optional)</Label>
               <Textarea id="cash_details" name="details" value={cashSaleData.details || ''} onChange={(e) => handleInputChange('cash', e)} disabled={isSubmitting}/>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4"> {/* Changed to 3 columns */}
                 <div className="grid gap-2">
                     <Label htmlFor="cash_amount">Amount</Label>
                     <Input id="cash_amount" name="amount" type="number" value={cashSaleData.amount || ''} onChange={(e) => handleInputChange('cash', e)} required disabled={isSubmitting} step="0.01"/>
+                </div>
+                 <div className="grid gap-2">
+                    <Label htmlFor="cash_currency">Currency</Label>
+                    <Select value={cashSaleData.currency || 'USD'} onValueChange={(value) => handleSelectChange('cash', 'currency', value as Currency)} disabled={isSubmitting}>
+                        <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                        <SelectContent>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="SSP">SSP</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="cash_amount_tendered">Amount Tendered</Label>
@@ -411,7 +419,7 @@ export default function TransactionsPage() {
 
 
             {changeDue !== null && changeDue >= 0 && !isShortfall && (
-              <p className="text-sm font-medium text-green-600">Change Due: ${(changeDue).toFixed(2)}</p>
+              <p className="text-sm font-medium text-green-600">Change Due: {cashSaleData.currency} {(changeDue).toFixed(2)}</p>
             )}
              {changeDue !== null && changeDue < 0 && !isShortfall && (
               <p className="text-sm font-medium text-destructive">Amount Tendered is less than Sale Amount. Select customer and set due date to record balance.</p>
@@ -460,7 +468,7 @@ export default function TransactionsPage() {
               <Label htmlFor="credit_details">Details (Optional)</Label>
               <Textarea id="credit_details" name="details" value={creditSaleData.details || ''} onChange={(e) => handleInputChange('credit', e)} disabled={isSubmitting}/>
             </div>
-            <div className="grid grid-cols-3 gap-4"> {/* Changed to grid-cols-3 */}
+            <div className="grid grid-cols-3 gap-4"> 
                 <div className="grid gap-2">
                     <Label htmlFor="credit_amount">Amount</Label>
                     <Input id="credit_amount" name="amount" type="number" value={creditSaleData.amount || ''} onChange={(e) => handleInputChange('credit', e)} required disabled={isSubmitting} step="0.01"/>
