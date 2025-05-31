@@ -15,7 +15,8 @@ import {
   Users,
   Truck,
   Building2,
-  ListChecks, // Added ListChecks icon
+  ListChecks,
+  BookText, // Added BookText icon for Ledger
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -27,7 +28,8 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/transactions", label: "Transactions", icon: ListChecks }, // New Transactions link
+  { href: "/transactions", label: "Transactions", icon: ListChecks },
+  { href: "/ledger", label: "Ledger", icon: BookText }, // New Ledger link
   { href: "/deposits", label: "Deposits", icon: Landmark },
   { href: "/banks", label: "Bank Accounts", icon: Building2 },
   { href: "/inventory", label: "Inventory", icon: Archive },
