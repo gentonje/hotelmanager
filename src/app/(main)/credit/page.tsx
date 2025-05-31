@@ -44,7 +44,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import type { Bank } from '@/app/(main)/banks/page'; // For bank list
+import type { Bank } from '@/app/(main)/banks/page';
 
 type CreditStatus = 'Pending' | 'Paid' | 'Overdue';
 type Currency = 'USD' | 'SSP';
@@ -55,7 +55,9 @@ export interface CreditSale {
   customer_name: string;
   item_service: string;
   details?: string;
-  amount: number;
+  original_amount: number;
+  paid_amount: number;
+  balance_due: number;
   currency: Currency;
   date: string; // Store as ISO string
   due_date?: string; // Store as ISO string
@@ -64,14 +66,16 @@ export interface CreditSale {
   updated_at?: string;
 }
 
-interface FormCreditSale extends Omit<CreditSale, 'date' | 'due_date'> {
+interface FormCreditSale extends Omit<CreditSale, 'date' | 'due_date' | 'paid_amount' | 'balance_due'> {
   date: Date;
   due_date?: Date;
+  // original_amount will be used for the main amount field in the form
 }
 
 interface PaymentDetails {
   paymentDate: Date;
   paymentMethod: PaymentMethod;
+  amountPaid: number;
   bankName?: string;
   depositReference?: string;
 }
@@ -81,11 +85,11 @@ export default function CreditPage() {
   const [creditSales, setCreditSales] = useState<CreditSale[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<CreditSale | null>(null);
-  const [currentSale, setCurrentSale] = useState<Partial<FormCreditSale>>({ date: new Date(), status: 'Pending', currency: 'USD' });
+  const [currentSale, setCurrentSale] = useState<Partial<FormCreditSale>>({ date: new Date(), status: 'Pending', currency: 'USD', original_amount: 0 });
   
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [saleForPayment, setSaleForPayment] = useState<CreditSale | null>(null);
-  const [paymentDetails, setPaymentDetails] = useState<PaymentDetails>({ paymentDate: new Date(), paymentMethod: 'cash'});
+  const [paymentDetails, setPaymentDetails] = useState<Partial<PaymentDetails>>({ paymentDate: new Date(), paymentMethod: 'cash'});
   const [banksList, setBanksList] = useState<Pick<Bank, 'id' | 'name' | 'currency'>[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -124,7 +128,7 @@ export default function CreditPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setCurrentSale(prev => ({ ...prev, [name]: name === 'amount' ? parseFloat(value) || 0 : value }));
+    setCurrentSale(prev => ({ ...prev, [name]: name === 'original_amount' ? parseFloat(value) || 0 : value }));
   };
   
   const handleDateChange = (field: 'date' | 'due_date', dateVal: Date | undefined) => {
@@ -141,33 +145,35 @@ export default function CreditPage() {
 
   const resetForm = () => {
     setEditingSale(null);
-    setCurrentSale({ date: new Date(), status: 'Pending', currency: 'USD' });
+    setCurrentSale({ date: new Date(), status: 'Pending', currency: 'USD', original_amount: 0 });
     setIsModalOpen(false);
   };
 
   const resetPaymentForm = () => {
     setSaleForPayment(null);
-    setPaymentDetails({ paymentDate: new Date(), paymentMethod: 'cash' });
+    setPaymentDetails({ paymentDate: new Date(), paymentMethod: 'cash', amountPaid: 0 });
     setIsPaymentModalOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentSale.customer_name || !currentSale.item_service || !currentSale.amount || !currentSale.date || !currentSale.currency) {
+    if (!currentSale.customer_name || !currentSale.item_service || !currentSale.original_amount || !currentSale.date || !currentSale.currency) {
       toast({ title: "Missing fields", description: "Please fill all required fields for the credit sale, including currency.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
 
-    const saleToSave = {
+    const saleToSave: Omit<CreditSale, 'id' | 'created_at' | 'updated_at' | 'paid_amount' | 'balance_due'> & {balance_due: number, paid_amount: number} = {
       customer_name: currentSale.customer_name!,
       item_service: currentSale.item_service!,
       details: currentSale.details,
-      amount: currentSale.amount!,
+      original_amount: currentSale.original_amount!,
       currency: currentSale.currency!,
       date: currentSale.date!.toISOString(),
       due_date: currentSale.due_date ? currentSale.due_date.toISOString() : undefined,
       status: currentSale.status || 'Pending',
+      paid_amount: editingSale ? editingSale.paid_amount : 0, // Preserve paid amount on edit, 0 for new
+      balance_due: editingSale ? (currentSale.original_amount! - editingSale.paid_amount) : currentSale.original_amount!, // Recalculate balance if original_amount changes
     };
 
     let error = null;
@@ -216,7 +222,7 @@ export default function CreditPage() {
   };
   
   const handleDeleteSale = async (saleId: string) => {
-    setIsSubmitting(true); // Use general submitting for delete as well
+    setIsSubmitting(true);
     const { error } = await supabase
       .from('credit_sales')
       .delete()
@@ -233,13 +239,17 @@ export default function CreditPage() {
 
   const openPaymentDialog = (sale: CreditSale) => {
     setSaleForPayment(sale);
-    setPaymentDetails({ paymentDate: new Date(), paymentMethod: 'cash' });
+    setPaymentDetails({ 
+        paymentDate: new Date(), 
+        paymentMethod: 'cash', 
+        amountPaid: sale.balance_due // Default to paying the full balance
+    });
     setIsPaymentModalOpen(true);
   };
 
   const handlePaymentDetailsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setPaymentDetails(prev => ({ ...prev, [name]: value }));
+    setPaymentDetails(prev => ({ ...prev, [name]: name === 'amountPaid' ? parseFloat(value) || 0 : value }));
   };
 
   const handlePaymentDateChange = (dateVal: Date | undefined) => {
@@ -258,15 +268,31 @@ export default function CreditPage() {
 
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!saleForPayment) return;
+    if (!saleForPayment || !paymentDetails.paymentDate || !paymentDetails.amountPaid || paymentDetails.amountPaid <= 0) {
+      toast({ title: "Invalid Payment Details", description: "Please enter a valid payment date and amount.", variant: "destructive" });
+      return;
+    }
+    if (paymentDetails.amountPaid > saleForPayment.balance_due) {
+      toast({ title: "Overpayment", description: `Amount paid (${paymentDetails.amountPaid}) cannot exceed balance due (${saleForPayment.balance_due}).`, variant: "destructive" });
+      return;
+    }
 
     setIsSubmittingPayment(true);
 
     try {
-      // 1. Update credit_sales status to 'Paid'
+      const newPaidAmount = saleForPayment.paid_amount + paymentDetails.amountPaid;
+      const newBalanceDue = saleForPayment.original_amount - newPaidAmount;
+      const newStatus = newBalanceDue <= 0 ? 'Paid' : saleForPayment.status;
+
+      // 1. Update credit_sales record
       const { error: updateStatusError } = await supabase
         .from('credit_sales')
-        .update({ status: 'Paid', updated_at: new Date().toISOString() })
+        .update({ 
+            paid_amount: newPaidAmount,
+            balance_due: newBalanceDue,
+            status: newStatus, 
+            updated_at: new Date().toISOString() 
+        })
         .eq('id', saleForPayment.id);
 
       if (updateStatusError) throw updateStatusError;
@@ -277,9 +303,9 @@ export default function CreditPage() {
           id: `cash_pay_${Date.now()}`,
           date: paymentDetails.paymentDate.toISOString(),
           item_service: `Payment for Credit: ${saleForPayment.item_service} (ID: ${saleForPayment.id})`,
-          details: `Customer: ${saleForPayment.customer_name}`,
-          amount: saleForPayment.amount,
-          currency: saleForPayment.currency, // Record currency for cash payment
+          details: `Customer: ${saleForPayment.customer_name}. Amount Paid: ${paymentDetails.amountPaid}`,
+          amount: paymentDetails.amountPaid,
+          currency: saleForPayment.currency,
           customer_name: saleForPayment.customer_name,
         };
         const { error: cashError } = await supabase.from('cash_sales').insert([cashSaleRecord]);
@@ -294,18 +320,18 @@ export default function CreditPage() {
         const depositRecord = {
           id: `dep_pay_${Date.now()}`,
           date: paymentDetails.paymentDate.toISOString(),
-          amount: saleForPayment.amount,
+          amount: paymentDetails.amountPaid,
           currency: saleForPayment.currency,
           bank: paymentDetails.bankName,
           reference_no: paymentDetails.depositReference,
           deposited_by: saleForPayment.customer_name,
-          description: `Payment for Credit Sale ID: ${saleForPayment.id}`,
+          description: `Payment for Credit Sale ID: ${saleForPayment.id}. Amount Paid: ${paymentDetails.amountPaid}`,
         };
         const { error: depositError } = await supabase.from('deposits').insert([depositRecord]);
         if (depositError) throw depositError;
       }
 
-      toast({ title: "Payment Recorded Successfully", description: `Credit sale for ${saleForPayment.customer_name} marked as paid.`, variant: "default" });
+      toast({ title: "Payment Recorded Successfully", description: `Payment of ${saleForPayment.currency} ${paymentDetails.amountPaid.toFixed(2)} for ${saleForPayment.customer_name} recorded.`, variant: "default" });
       resetPaymentForm();
       fetchCreditSales();
 
@@ -325,6 +351,11 @@ export default function CreditPage() {
       default: return 'outline';
     }
   };
+
+  const formatCurrencyValue = (value: number | undefined) => {
+      if (value === undefined || value === null) return '0.00';
+      return value.toFixed(2);
+  }
 
   return (
     <>
@@ -358,8 +389,8 @@ export default function CreditPage() {
             </div>
              <div className="grid grid-cols-3 gap-4">
                 <div className="grid gap-2">
-                    <Label htmlFor="amount" className="font-body">Amount</Label>
-                    <Input id="amount" name="amount" type="number" value={currentSale.amount || ''} onChange={handleInputChange} required disabled={isSubmitting}/>
+                    <Label htmlFor="original_amount" className="font-body">Original Amount</Label>
+                    <Input id="original_amount" name="original_amount" type="number" value={currentSale.original_amount || ''} onChange={handleInputChange} required disabled={isSubmitting}/>
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="currency" className="font-body">Currency</Label>
@@ -373,11 +404,11 @@ export default function CreditPage() {
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="status" className="font-body">Status</Label>
-                    <Select value={currentSale.status || 'Pending'} onValueChange={handleStatusChange} disabled={isSubmitting}>
+                    <Select value={currentSale.status || 'Pending'} onValueChange={handleStatusChange} disabled={isSubmitting || (editingSale && editingSale.status === 'Paid')  /* Prevent changing status if already paid manually */}>
                         <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                         <SelectContent>
                         <SelectItem value="Pending">Pending</SelectItem>
-                        <SelectItem value="Paid">Paid</SelectItem>
+                        <SelectItem value="Paid" disabled={editingSale && editingSale.balance_due > 0}>Paid (Set via Payment)</SelectItem>
                         <SelectItem value="Overdue">Overdue</SelectItem>
                         </SelectContent>
                     </Select>
@@ -420,14 +451,14 @@ export default function CreditPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Record Full Payment Dialog */}
+      {/* Record Payment Dialog */}
       <Dialog open={isPaymentModalOpen} onOpenChange={(isOpen) => { if (!isSubmittingPayment) setIsPaymentModalOpen(isOpen); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="font-headline">Record Full Payment</DialogTitle>
+            <DialogTitle className="font-headline">Record Payment</DialogTitle>
             {saleForPayment && (
               <DialogDescription className="font-body">
-                Recording payment for {saleForPayment.customer_name} (Amount: {saleForPayment.currency} {saleForPayment.amount.toFixed(2)}).
+                Recording payment for {saleForPayment.customer_name} (Balance: {saleForPayment.currency} {formatCurrencyValue(saleForPayment.balance_due)}).
               </DialogDescription>
             )}
           </DialogHeader>
@@ -444,6 +475,20 @@ export default function CreditPage() {
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={paymentDetails.paymentDate} onSelect={handlePaymentDateChange} initialFocus /></PopoverContent>
                 </Popover>
+              </div>
+               <div className="grid gap-2">
+                <Label htmlFor="amountPaid" className="font-body">Amount Paid ({saleForPayment.currency})</Label>
+                <Input 
+                  id="amountPaid" 
+                  name="amountPaid" 
+                  type="number" 
+                  value={paymentDetails.amountPaid || ''} 
+                  onChange={handlePaymentDetailsChange} 
+                  required 
+                  disabled={isSubmittingPayment}
+                  max={saleForPayment.balance_due}
+                  step="0.01"
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="paymentMethod" className="font-body">Payment Method</Label>
@@ -505,7 +550,9 @@ export default function CreditPage() {
                 <TableRow>
                   <TableHead className="font-body">Customer</TableHead>
                   <TableHead className="font-body">Item/Service</TableHead>
-                  <TableHead className="font-body">Amount</TableHead>
+                  <TableHead className="font-body">Orig. Amount</TableHead>
+                  <TableHead className="font-body">Paid Amount</TableHead>
+                  <TableHead className="font-body">Balance Due</TableHead>
                   <TableHead className="font-body">Currency</TableHead>
                   <TableHead className="font-body">Date</TableHead>
                   <TableHead className="font-body">Due Date</TableHead>
@@ -518,18 +565,20 @@ export default function CreditPage() {
                   <TableRow key={sale.id}>
                     <TableCell className="font-semibold font-body">{sale.customer_name}</TableCell>
                     <TableCell className="font-body">{sale.item_service}</TableCell>
-                    <TableCell className="font-body">{sale.amount.toFixed(2)}</TableCell>
+                    <TableCell className="font-body">{formatCurrencyValue(sale.original_amount)}</TableCell>
+                    <TableCell className="font-body">{formatCurrencyValue(sale.paid_amount)}</TableCell>
+                    <TableCell className="font-body font-semibold">{formatCurrencyValue(sale.balance_due)}</TableCell>
                     <TableCell className="font-body">{sale.currency}</TableCell>
                     <TableCell className="font-body">{format(parseISO(sale.date), "PP")}</TableCell>
                     <TableCell className="font-body">{sale.due_date ? format(parseISO(sale.due_date), "PP") : 'N/A'}</TableCell>
                     <TableCell><Badge variant={getStatusBadgeVariant(sale.status)} className="font-body">{sale.status}</Badge></TableCell>
                     <TableCell className="text-right space-x-1">
                       {sale.status !== 'Paid' && (
-                        <Button variant="ghost" size="icon" onClick={() => openPaymentDialog(sale)} title="Record Full Payment" disabled={isSubmitting || isSubmittingPayment}>
+                        <Button variant="ghost" size="icon" onClick={() => openPaymentDialog(sale)} title="Record Payment" disabled={isSubmitting || isSubmittingPayment}>
                           <CheckCircle2 className="h-4 w-4 text-green-600" />
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => openEditModal(sale)} title="Edit Sale" disabled={isSubmitting || isSubmittingPayment}>
+                      <Button variant="ghost" size="icon" onClick={() => openEditModal(sale)} title="Edit Sale" disabled={isSubmitting || isSubmittingPayment || sale.status === 'Paid'}>
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <AlertDialog>
@@ -558,7 +607,7 @@ export default function CreditPage() {
                   </TableRow>
                 )) : (
                    <TableRow>
-                      <TableCell colSpan={8} className="text-center font-body h-24">No credit sales recorded yet.</TableCell>
+                      <TableCell colSpan={10} className="text-center font-body h-24">No credit sales recorded yet.</TableCell>
                    </TableRow>
                 )}
               </TableBody>

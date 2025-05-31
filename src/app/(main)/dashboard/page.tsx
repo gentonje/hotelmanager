@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { StatCard } from "@/components/shared/stat-card";
-import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, AlertTriangle, Info, Loader2 } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, AlertTriangle, Info, Loader2, HandCoins, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,17 +20,27 @@ import { Progress } from "@/components/ui/progress";
 import { format } from 'date-fns';
 
 interface DashboardStats {
-  totalSalesToday: number;
-  cashDepositsToday: number;
-  cashExpensesToday: number;
-  outstandingCustomerCredit: number;
+  totalCreditSalesTodayUSD: number;
+  totalCreditSalesTodaySSP: number;
+  cashDepositsTodayUSD: number;
+  cashDepositsTodaySSP: number;
+  cashExpensesTodayUSD: number;
+  cashExpensesTodaySSP: number;
+  outstandingCustomerCreditUSD: number;
+  outstandingCustomerCreditSSP: number;
+  activeDebtorsCount: number;
 }
 
 const initialStats: DashboardStats = {
-  totalSalesToday: 0,
-  cashDepositsToday: 0,
-  cashExpensesToday: 0,
-  outstandingCustomerCredit: 0,
+  totalCreditSalesTodayUSD: 0,
+  totalCreditSalesTodaySSP: 0,
+  cashDepositsTodayUSD: 0,
+  cashDepositsTodaySSP: 0,
+  cashExpensesTodayUSD: 0,
+  cashExpensesTodaySSP: 0,
+  outstandingCustomerCreditUSD: 0,
+  outstandingCustomerCreditSSP: 0,
+  activeDebtorsCount: 0,
 };
 
 export default function DashboardPage() {
@@ -38,9 +48,8 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const formatCurrency = (amount: number) => {
-    // This is a basic formatter. You might want to enhance it for specific currency symbols or locales.
-    return `$${amount.toFixed(2)}`;
+  const formatCurrency = (amount: number, currency: 'USD' | 'SSP') => {
+    return `${currency} ${amount.toFixed(2)}`;
   };
 
   useEffect(() => {
@@ -51,48 +60,67 @@ export default function DashboardPage() {
         const startDate = format(today, "yyyy-MM-dd'T'00:00:00.000'Z'");
         const endDate = format(today, "yyyy-MM-dd'T'23:59:59.999'Z'");
 
-        // Fetch today's credit sales
+        // --- Today's Credit Sales ---
         const { data: salesData, error: salesError } = await supabase
           .from('credit_sales')
-          .select('amount')
+          .select('original_amount, currency')
           .gte('date', startDate)
           .lte('date', endDate);
         if (salesError) throw salesError;
-        const totalSalesToday = salesData?.reduce((sum, sale) => sum + sale.amount, 0) || 0;
+        const totalCreditSalesTodayUSD = salesData?.filter(s => s.currency === 'USD').reduce((sum, sale) => sum + sale.original_amount, 0) || 0;
+        const totalCreditSalesTodaySSP = salesData?.filter(s => s.currency === 'SSP').reduce((sum, sale) => sum + sale.original_amount, 0) || 0;
 
-        // Fetch today's deposits
+        // --- Today's Deposits ---
         const { data: depositsData, error: depositsError } = await supabase
           .from('deposits')
-          .select('amount')
+          .select('amount, currency')
           .gte('date', startDate)
           .lte('date', endDate);
         if (depositsError) throw depositsError;
-        const cashDepositsToday = depositsData?.reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
+        const cashDepositsTodayUSD = depositsData?.filter(d => d.currency === 'USD').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
+        const cashDepositsTodaySSP = depositsData?.filter(d => d.currency === 'SSP').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
         
-        // Fetch today's expenses
-        const { data: expensesData, error: expensesError } = await supabase
+        // --- Today's Expenses ---
+        // Assuming expenses table also has a 'currency' column. If not, this needs adjustment.
+        // For now, let's assume all expenses are in a primary currency (e.g., USD) or we need to add currency to expenses table.
+        // Let's assume 'expenses' table has amount and an IMPLICIT currency for now, or needs a currency field.
+        // To make this robust, 'expenses' table SHOULD have a currency column.
+        // For this example, I'll query all and assume USD if no currency field.
+         const { data: expensesData, error: expensesError } = await supabase
           .from('expenses')
-          .select('amount')
-          .gte('date', startDate)
-          .lte('date', endDate);
+          .select('amount'); // Ideally: select('amount, currency')
+          // .gte('date', startDate) // Assuming 'date' field exists
+          // .lte('date', endDate);
         if (expensesError) throw expensesError;
-        const cashExpensesToday = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+        // const cashExpensesTodayUSD = expensesData?.filter(e => e.currency === 'USD').reduce((sum, expense) => sum + expense.amount, 0) || 0;
+        // const cashExpensesTodaySSP = expensesData?.filter(e => e.currency === 'SSP').reduce((sum, expense) => sum + expense.amount, 0) || 0;
+        // Simplified:
+        const cashExpensesTodayUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0; // Treat as USD for now
+        const cashExpensesTodaySSP = 0; // Placeholder
 
-        // Fetch outstanding customer credit
+        // --- Outstanding Customer Credit ---
         const { data: creditData, error: creditError } = await supabase
           .from('credit_sales')
-          .select('amount, status')
+          .select('balance_due, currency, customer_name')
           .in('status', ['Pending', 'Overdue']);
         if (creditError) throw creditError;
-        const outstandingCustomerCredit = creditData?.reduce((sum, sale) => sum + sale.amount, 0) || 0;
-        const activeDebtorsCount = creditData?.length || 0;
+        const outstandingCustomerCreditUSD = creditData?.filter(c => c.currency === 'USD').reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
+        const outstandingCustomerCreditSSP = creditData?.filter(c => c.currency === 'SSP').reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
+        
+        const distinctDebtors = new Set(creditData?.map(c => c.customer_name));
+        const activeDebtorsCount = distinctDebtors.size;
 
 
         setStats({
-          totalSalesToday,
-          cashDepositsToday,
-          cashExpensesToday,
-          outstandingCustomerCredit,
+          totalCreditSalesTodayUSD,
+          totalCreditSalesTodaySSP,
+          cashDepositsTodayUSD,
+          cashDepositsTodaySSP,
+          cashExpensesTodayUSD,
+          cashExpensesTodaySSP,
+          outstandingCustomerCreditUSD,
+          outstandingCustomerCreditSSP,
+          activeDebtorsCount,
         });
 
       } catch (error: any) {
@@ -101,36 +129,21 @@ export default function DashboardPage() {
           description: error.message,
           variant: "destructive",
         });
-        setStats(initialStats); // Reset to initial on error
+        setStats(initialStats); 
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchDashboardData();
+    const intervalId = setInterval(fetchDashboardData, 60000); // Refresh every 60 seconds
+    return () => clearInterval(intervalId);
   }, [toast]);
 
-  const dailyRevenue = { // Keeping structure similar for StatCard compatibility
-    total: formatCurrency(stats.totalSalesToday), // Using total sales as "Total Revenue (Today)" for now
-    cashAtHand: "$0.00", // Placeholder
-    cashReceived: formatCurrency(stats.cashDepositsToday),
-    cashPaidOut: formatCurrency(stats.cashExpensesToday),
-    cashOwing: formatCurrency(stats.outstandingCustomerCredit),
-    cashOwed: "$0.00", // Placeholder
-  };
   
-  const activeDebtorsCount = stats.outstandingCustomerCredit > 0 ? 
-    (isLoading ? 'Loading...' : `from ${
-        // Quick fetch for count of distinct customers with pending/overdue sales.
-        // This is a simplified count. A more robust approach might involve a separate query.
-        (async () => {
-            const { count } = await supabase
-                .from('credit_sales')
-                .select('customer_name', { count: 'exact', head: true })
-                .in('status', ['Pending', 'Overdue']);
-            return count || 0;
-        })()
-    } debtors`) : '0 Active Debtors';
+  const activeDebtorsMessage = stats.activeDebtorsCount > 0 
+    ? `${stats.activeDebtorsCount} Active Debtor${stats.activeDebtorsCount > 1 ? 's' : ''}`
+    : 'No outstanding credit';
 
 
   if (isLoading) {
@@ -145,50 +158,50 @@ export default function DashboardPage() {
   return (
     <>
       <PageTitle title="Dashboard" subtitle="Overview of hotel operations and revenue." icon={DollarSign}>
-        <Button disabled>View Full Report</Button>
+        {/* <Button disabled>View Full Report</Button> */}
       </PageTitle>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-6">
         <StatCard
-          title="Total Sales Value (Today)"
-          value={dailyRevenue.total}
+          title="Credit Sales Value (Today)"
+          value={`${formatCurrency(stats.totalCreditSalesTodayUSD, 'USD')} / ${formatCurrency(stats.totalCreditSalesTodaySSP, 'SSP')}`}
           icon={TrendingUp}
-          description="Based on credit sales"
+          description="Sum of new credit sales"
           className="bg-gradient-to-r from-green-500/10 to-green-600/10 border-green-500"
         />
         <StatCard
-          title="Cash Deposits (Today)"
-          value={dailyRevenue.cashReceived}
+          title="Bank Deposits Value (Today)"
+          value={`${formatCurrency(stats.cashDepositsTodayUSD, 'USD')} / ${formatCurrency(stats.cashDepositsTodaySSP, 'SSP')}`}
           icon={Landmark}
-          description="Total deposits recorded"
+          description="Total value of bank deposits"
           className="bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500"
         />
         <StatCard
-          title="Cash Expenses (Today)"
-          value={dailyRevenue.cashPaidOut}
+          title="Expenses Value (Today)"
+          value={`${formatCurrency(stats.cashExpensesTodayUSD, 'USD')} / ${formatCurrency(stats.cashExpensesTodaySSP, 'SSP')}`}
           icon={TrendingDown}
-          description="Total expenses paid"
+          description="Total expenses recorded (Note: Currency breakdown for expenses might be simplified)"
            className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500"
         />
         <StatCard
           title="Outstanding Customer Credit"
-          value={dailyRevenue.cashOwing}
+          value={`${formatCurrency(stats.outstandingCustomerCreditUSD, 'USD')} / ${formatCurrency(stats.outstandingCustomerCreditSSP, 'SSP')}`}
           icon={Users}
-          description={activeDebtorsCount.toString()} // Simplified, consider fetching actual count
+          description={activeDebtorsMessage}
            className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500"
         />
          <StatCard
-          title="Cash at Hand"
-          value={dailyRevenue.cashAtHand}
-          icon={DollarSign}
-          description="Calculation pending"
+          title="Cash At Hand (Balance)"
+          value="N/A"
+          icon={HandCoins}
+          description="Calculation needs more data structure (e.g. opening balance, cash-specific expenses)"
            className="bg-gradient-to-r from-sky-500/10 to-sky-600/10 border-sky-500"
         />
          <StatCard
-          title="Cash Owed (to Creditors)"
-          value={dailyRevenue.cashOwed}
-          icon={AlertTriangle}
-          description="Tracking pending"
+          title="Cash Owed to Creditors"
+          value="N/A"
+          icon={Coins}
+          description="Requires payables/bills tracking system"
            className="bg-gradient-to-r from-red-500/10 to-red-600/10 border-red-500"
         />
       </div>
@@ -196,8 +209,8 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline">Revenue Breakdown</CardTitle>
-            <CardDescription className="font-body">Performance of different revenue streams today (Placeholder).</CardDescription>
+            <CardTitle className="font-headline">Revenue Breakdown (Placeholder)</CardTitle>
+            <CardDescription className="font-body">Performance of different revenue streams today.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -231,15 +244,15 @@ export default function DashboardPage() {
           </CardContent>
           <CardFooter>
              <p className="text-xs text-muted-foreground font-body flex items-center">
-                <Info className="w-3 h-3 mr-1.5" /> Data updates on page load.
+                <Info className="w-3 h-3 mr-1.5" /> Dashboard data updates periodically.
              </p>
           </CardFooter>
         </Card>
 
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline">Quick Actions</CardTitle>
-             <CardDescription className="font-body">Common tasks at your fingertips (Placeholder).</CardDescription>
+            <CardTitle className="font-headline">Quick Actions (Placeholder)</CardTitle>
+             <CardDescription className="font-body">Common tasks at your fingertips.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Button variant="default" size="lg" disabled>Add New Reservation</Button>

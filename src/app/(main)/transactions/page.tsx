@@ -40,7 +40,9 @@ interface TransactionCreditSale {
   customer_name: string;
   item_service: string;
   details?: string;
-  amount: number;
+  original_amount: number;
+  paid_amount: number;
+  balance_due: number;
   currency: Currency;
   date: string; // ISO string
   due_date?: string; // ISO string
@@ -55,19 +57,19 @@ export interface CashSale {
   item_service: string;
   details?: string;
   amount: number;
-  currency: Currency; // Added currency
-  customer_name?: string; // Optional customer name for cash sales
+  currency: Currency;
+  customer_name?: string;
   created_at?: string;
   updated_at?: string;
 }
 
-interface FormCashSale extends Omit<CashSale, 'date' | 'id'> {
+interface FormCashSale extends Omit<CashSale, 'date' | 'id' | 'created_at' | 'updated_at'> {
   date: Date;
   amount_tendered?: number;
   due_date_for_balance?: Date; // For shortfall scenario
 }
 
-interface FormCreditSaleState extends Omit<TransactionCreditSale, 'id' | 'date' | 'due_date' | 'created_at' | 'updated_at'> {
+interface FormCreditSaleState extends Omit<TransactionCreditSale, 'id' | 'date' | 'due_date' | 'created_at' | 'updated_at' | 'paid_amount' | 'balance_due'> {
   date: Date;
   due_date?: Date;
 }
@@ -79,7 +81,7 @@ interface FormDepositState extends Omit<Deposit, 'id' | 'date' | 'created_at' | 
 
 export default function TransactionsPage() {
   const [selectedType, setSelectedType] = useState<TransactionType>('');
-  const [isLoading, setIsLoading] = useState(false); // For fetching dropdown data
+  const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
@@ -91,7 +93,7 @@ export default function TransactionsPage() {
 
   // Form states
   const [cashSaleData, setCashSaleData] = useState<Partial<FormCashSale>>({ date: new Date(), amount: 0, currency: 'USD' });
-  const [creditSaleData, setCreditSaleData] = useState<Partial<FormCreditSaleState>>({ date: new Date(), status: 'Pending', amount: 0, currency: 'USD' });
+  const [creditSaleData, setCreditSaleData] = useState<Partial<FormCreditSaleState>>({ date: new Date(), status: 'Pending', original_amount: 0, currency: 'USD' });
   const [depositData, setDepositData] = useState<Partial<FormDepositState>>({ date: new Date(), currency: 'USD', amount: 0 });
   
   const fetchDropdownData = async () => {
@@ -116,31 +118,30 @@ export default function TransactionsPage() {
 
  useEffect(() => {
     const newCustomerName = searchParams.get('newCustomerName');
-    const customerOrigin = searchParams.get('newCustomerOrigin'); // Keep track of which form needed the customer
+    const customerOrigin = searchParams.get('newCustomerOrigin'); 
 
     if (newCustomerName && customersList.length > 0) {
       const customerExists = customersList.find(c => c.name === newCustomerName);
       if (customerExists) {
-        if (selectedType === 'cash_sale' || customerOrigin === 'transactionShortfall') {
+        if (customerOrigin === 'transactionShortfall') {
           setCashSaleData(prev => ({ ...prev, customer_name: newCustomerName }));
-        } else if (selectedType === 'credit_sale' || customerOrigin === 'transactionCredit') {
+        } else if (customerOrigin === 'transactionCredit') {
           setCreditSaleData(prev => ({ ...prev, customer_name: newCustomerName }));
-        } else if (selectedType === 'deposit' || customerOrigin === 'transactionDeposit') {
+        } else if (customerOrigin === 'transactionDeposit') {
           setDepositData(prev => ({ ...prev, deposited_by: newCustomerName }));
         }
       }
-      // Clean up URL by removing the query parameters
       const current = new URL(window.location.toString());
       current.searchParams.delete('newCustomerName');
       current.searchParams.delete('newCustomerOrigin');
       router.replace(current.pathname + current.search, { shallow: true });
     }
-  }, [searchParams, customersList, selectedType, router, pathname]);
+  }, [searchParams, customersList, router, pathname]);
 
 
   const resetAllForms = () => {
     setCashSaleData({ date: new Date(), amount: 0, currency: 'USD', item_service: '', details: '', customer_name: '', amount_tendered: undefined, due_date_for_balance: undefined });
-    setCreditSaleData({ date: new Date(), status: 'Pending', amount: 0, currency: 'USD', customer_name: '', item_service: '', details: '' });
+    setCreditSaleData({ date: new Date(), status: 'Pending', original_amount: 0, currency: 'USD', customer_name: '', item_service: '', details: '' });
     setDepositData({ date: new Date(), currency: 'USD', amount: 0, bank: '', reference_no: '', deposited_by: '', description: '' });
   };
   
@@ -151,7 +152,7 @@ export default function TransactionsPage() {
 
   const handleInputChange = (form: 'cash' | 'credit' | 'deposit', e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    const val = (name === 'amount' || name === 'amount_tendered') && value !== '' ? parseFloat(value) : value;
+    const val = (name === 'amount' || name === 'amount_tendered' || name === 'original_amount') && value !== '' ? parseFloat(value) : value;
     
     if (form === 'cash') setCashSaleData(prev => ({ ...prev, [name]: val }));
     if (form === 'credit') setCreditSaleData(prev => ({ ...prev, [name]: val }));
@@ -211,23 +212,25 @@ export default function TransactionsPage() {
             setIsSubmitting(false); return;
           }
 
-          const creditAmount = cashSaleData.amount! - (cashSaleData.amount_tendered || 0);
-          const creditDetails = `Original Item: ${cashSaleData.item_service}. Sale Amount: ${cashSaleData.currency} ${cashSaleData.amount}. Tendered: ${cashSaleData.currency} ${cashSaleData.amount_tendered || 0}. Balance Due: ${cashSaleData.currency} ${creditAmount.toFixed(2)}. Notes: ${cashSaleData.details || ''}`;
+          const shortfallAmount = cashSaleData.amount! - (cashSaleData.amount_tendered || 0);
+          const creditDetails = `Original Item: ${cashSaleData.item_service}. Sale Amount: ${cashSaleData.currency} ${cashSaleData.amount}. Tendered: ${cashSaleData.currency} ${cashSaleData.amount_tendered || 0}. Balance Due: ${cashSaleData.currency} ${shortfallAmount.toFixed(2)}. Notes: ${cashSaleData.details || ''}`;
           
           const creditToSave: Omit<TransactionCreditSale, 'id' | 'created_at' | 'updated_at'> = {
             customer_name: cashSaleData.customer_name!,
             item_service: "Balance from Cash Sale",
             details: creditDetails,
-            amount: creditAmount,
+            original_amount: shortfallAmount,
+            paid_amount: 0,
+            balance_due: shortfallAmount,
             currency: cashSaleData.currency!, 
             date: cashSaleData.date.toISOString(),
             due_date: cashSaleData.due_date_for_balance.toISOString(),
             status: 'Pending',
           };
-          const { error: insertCreditError } = await supabase.from('credit_sales').insert([{ ...creditToSave, id: `cred_${Date.now()}` }]);
+          const { error: insertCreditError } = await supabase.from('credit_sales').insert([{ ...creditToSave, id: `cred_sf_${Date.now()}` }]);
           error = insertCreditError;
           if (!error) {
-            toast({ title: `Credit Sale Created`, description: `Outstanding balance of ${creditToSave.currency} ${creditAmount.toFixed(2)} recorded for ${cashSaleData.customer_name}.`, variant: "default" });
+            toast({ title: `Credit Sale Created`, description: `Outstanding balance of ${creditToSave.currency} ${shortfallAmount.toFixed(2)} recorded for ${cashSaleData.customer_name}.`, variant: "default" });
             resetAllForms();
           }
 
@@ -248,7 +251,7 @@ export default function TransactionsPage() {
           }
         }
       } else if (selectedType === 'credit_sale') {
-        if (!creditSaleData.customer_name || !creditSaleData.item_service || !creditSaleData.amount || !creditSaleData.date || !creditSaleData.status || !creditSaleData.currency) {
+        if (!creditSaleData.customer_name || !creditSaleData.item_service || !creditSaleData.original_amount || !creditSaleData.date || !creditSaleData.status || !creditSaleData.currency) {
            toast({ title: "Missing fields", description: "Please fill all required credit sale fields, including currency.", variant: "destructive" });
            setIsSubmitting(false); return;
         }
@@ -256,7 +259,9 @@ export default function TransactionsPage() {
             customer_name: creditSaleData.customer_name!,
             item_service: creditSaleData.item_service!,
             details: creditSaleData.details,
-            amount: creditSaleData.amount!,
+            original_amount: creditSaleData.original_amount!,
+            paid_amount: 0, // New credit sales start with 0 paid
+            balance_due: creditSaleData.original_amount!, // Balance due is full amount initially
             currency: creditSaleData.currency!,
             date: creditSaleData.date!.toISOString(),
             due_date: creditSaleData.due_date ? creditSaleData.due_date.toISOString() : undefined,
@@ -324,7 +329,7 @@ export default function TransactionsPage() {
               <Label htmlFor="cash_details">Details (Optional)</Label>
               <Textarea id="cash_details" name="details" value={cashSaleData.details || ''} onChange={(e) => handleInputChange('cash', e)} disabled={isSubmitting}/>
             </div>
-            <div className="grid grid-cols-3 gap-4"> {/* Changed to 3 columns */}
+            <div className="grid grid-cols-3 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="cash_amount">Amount</Label>
                     <Input id="cash_amount" name="amount" type="number" value={cashSaleData.amount || ''} onChange={(e) => handleInputChange('cash', e)} required disabled={isSubmitting} step="0.01"/>
@@ -362,13 +367,14 @@ export default function TransactionsPage() {
                         <PlusCircle className="h-5 w-5" />
                       </Button>
                    </div>
-                    <Select value={cashSaleData.customer_name || ''} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value)} disabled={isSubmitting || isLoading}>
+                    <Select value={cashSaleData.customer_name || '_SELECT_CUST_SF_'} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value === '_SELECT_CUST_SF_' ? '' : value)} disabled={isSubmitting || isLoading}>
                         <SelectTrigger id="cash_customer_name_shortfall">
                             <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
                         </SelectTrigger>
                         <SelectContent>
                             {isLoading && <SelectItem value="_LOADING_CUST_SF_" disabled>Loading customers...</SelectItem>}
                             {!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_SF_" disabled>No customers found</SelectItem>}
+                             <SelectItem value="_SELECT_CUST_SF_" disabled>Select customer</SelectItem>
                             {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
                         </SelectContent>
                     </Select>
@@ -404,13 +410,14 @@ export default function TransactionsPage() {
                         <PlusCircle className="h-5 w-5" />
                       </Button>
                   </div>
-                <Select value={cashSaleData.customer_name || ''} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value)} disabled={isSubmitting || isLoading}>
+                <Select value={cashSaleData.customer_name || '_SELECT_CUST_OPT_'} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value === '_SELECT_CUST_OPT_' ? '' : value)} disabled={isSubmitting || isLoading}>
                     <SelectTrigger id="cash_customer_name_optional">
                         <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer (Optional)"} />
                     </SelectTrigger>
                     <SelectContent>
                         {isLoading && <SelectItem value="_LOADING_CUST_OPT_" disabled>Loading customers...</SelectItem>}
                         {!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_OPT_" disabled>No customers found</SelectItem>}
+                        <SelectItem value="_SELECT_CUST_OPT_">None (Optional)</SelectItem>
                         {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
                     </SelectContent>
                 </Select>
@@ -449,13 +456,14 @@ export default function TransactionsPage() {
                     <PlusCircle className="h-5 w-5" />
                 </Button>
               </div>
-              <Select value={creditSaleData.customer_name || ''} onValueChange={(value) => handleSelectChange('credit', 'customer_name', value)} disabled={isSubmitting || isLoading}>
+              <Select value={creditSaleData.customer_name || '_SELECT_CUST_CREDIT_'} onValueChange={(value) => handleSelectChange('credit', 'customer_name', value === '_SELECT_CUST_CREDIT_' ? '' : value)} disabled={isSubmitting || isLoading}>
                 <SelectTrigger id="credit_customer_name">
                     <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
                 </SelectTrigger>
                 <SelectContent>
                     {isLoading && <SelectItem value="_LOADING_CUST_CREDIT_" disabled>Loading customers...</SelectItem>}
                     {!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_CREDIT_" disabled>No customers found</SelectItem>}
+                    <SelectItem value="_SELECT_CUST_CREDIT_" disabled>Select customer</SelectItem>
                     {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -470,8 +478,8 @@ export default function TransactionsPage() {
             </div>
             <div className="grid grid-cols-3 gap-4"> 
                 <div className="grid gap-2">
-                    <Label htmlFor="credit_amount">Amount</Label>
-                    <Input id="credit_amount" name="amount" type="number" value={creditSaleData.amount || ''} onChange={(e) => handleInputChange('credit', e)} required disabled={isSubmitting} step="0.01"/>
+                    <Label htmlFor="credit_original_amount">Amount</Label>
+                    <Input id="credit_original_amount" name="original_amount" type="number" value={creditSaleData.original_amount || ''} onChange={(e) => handleInputChange('credit', e)} required disabled={isSubmitting} step="0.01"/>
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="credit_currency">Currency</Label>
@@ -489,7 +497,7 @@ export default function TransactionsPage() {
                         <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                         <SelectContent>
                         <SelectItem value="Pending">Pending</SelectItem>
-                        <SelectItem value="Paid">Paid</SelectItem>
+                        <SelectItem value="Paid" disabled>Paid (Set via Payment)</SelectItem>
                         <SelectItem value="Overdue">Overdue</SelectItem>
                         </SelectContent>
                     </Select>
@@ -559,13 +567,14 @@ export default function TransactionsPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="deposit_bank">Bank</Label>
-              <Select value={depositData.bank || ''} onValueChange={(value) => handleSelectChange('deposit', 'bank', value)} disabled={isSubmitting || isLoading}>
+              <Select value={depositData.bank || '_SELECT_BANK_'} onValueChange={(value) => handleSelectChange('deposit', 'bank', value === '_SELECT_BANK_' ? '' : value)} disabled={isSubmitting || isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder={isLoading ? "Loading banks..." : "Select bank"} />
                 </SelectTrigger>
                 <SelectContent>
                   {isLoading && <SelectItem value="_LOADING_BANKS_" disabled>Loading banks...</SelectItem>}
                   {!isLoading && banksList.length === 0 && <SelectItem value="_EMPTY_BANKS_" disabled>No banks available</SelectItem>}
+                  <SelectItem value="_SELECT_BANK_" disabled>Select bank</SelectItem>
                   {banksList.map(bank => <SelectItem key={bank.id} value={bank.name}>{bank.name} ({bank.currency})</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -589,13 +598,14 @@ export default function TransactionsPage() {
                     <PlusCircle className="h-5 w-5" />
                 </Button>
               </div>
-               <Select value={depositData.deposited_by || ''} onValueChange={(value) => handleSelectChange('deposit', 'deposited_by', value)} disabled={isSubmitting || isLoading}>
+               <Select value={depositData.deposited_by || '_SELECT_CUST_DEP_'} onValueChange={(value) => handleSelectChange('deposit', 'deposited_by', value === '_SELECT_CUST_DEP_' ? '' : value)} disabled={isSubmitting || isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
                 </SelectTrigger>
                 <SelectContent>
                   {isLoading && <SelectItem value="_LOADING_CUST_DEP_" disabled>Loading customers...</SelectItem>}
                   {!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_DEP_" disabled>No customers found</SelectItem>}
+                  <SelectItem value="_SELECT_CUST_DEP_" disabled>Select customer</SelectItem>
                   {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
                 </SelectContent>
               </Select>
