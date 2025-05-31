@@ -14,7 +14,8 @@ import {
   Hotel,
   Users,
   Truck,
-  Building2, // Added Building2 icon
+  Building2,
+  ListChecks, // Added ListChecks icon
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -26,8 +27,9 @@ import {
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/transactions", label: "Transactions", icon: ListChecks }, // New Transactions link
   { href: "/deposits", label: "Deposits", icon: Landmark },
-  { href: "/banks", label: "Bank Accounts", icon: Building2 }, // New Banks link
+  { href: "/banks", label: "Bank Accounts", icon: Building2 },
   { href: "/inventory", label: "Inventory", icon: Archive },
   { href: "/credit", label: "Credit Sales", icon: CreditCard },
   { href: "/expenses", label: "Expenses", icon: Receipt },
@@ -55,7 +57,7 @@ export function SidebarNav() {
           <Link href={item.href} passHref legacyBehavior>
             <SidebarMenuButton
               asChild
-              isActive={pathname.startsWith(item.href)}
+              isActive={pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))}
               onClick={handleLinkClick}
               tooltip={item.label}
             >
