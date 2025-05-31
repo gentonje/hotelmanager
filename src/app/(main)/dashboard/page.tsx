@@ -1,7 +1,12 @@
 
+"use client";
+
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { StatCard } from "@/components/shared/stat-card";
-import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, AlertTriangle, Info } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, AlertTriangle, Info, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,66 +17,178 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { format } from 'date-fns';
+
+interface DashboardStats {
+  totalSalesToday: number;
+  cashDepositsToday: number;
+  cashExpensesToday: number;
+  outstandingCustomerCredit: number;
+}
+
+const initialStats: DashboardStats = {
+  totalSalesToday: 0,
+  cashDepositsToday: 0,
+  cashExpensesToday: 0,
+  outstandingCustomerCredit: 0,
+};
 
 export default function DashboardPage() {
-  // Placeholder data has been removed.
-  // Real data fetching and calculation would be implemented here.
-  const dailyRevenue = {
-    total: "$0.00",
-    cashAtHand: "$0.00",
-    cashReceived: "$0.00",
-    cashPaidOut: "$0.00",
-    cashOwing: "$0.00",
-    cashOwed: "$0.00",
+  const [stats, setStats] = useState<DashboardStats>(initialStats);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  const formatCurrency = (amount: number) => {
+    // This is a basic formatter. You might want to enhance it for specific currency symbols or locales.
+    return `$${amount.toFixed(2)}`;
   };
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setIsLoading(true);
+      try {
+        const today = new Date();
+        const startDate = format(today, "yyyy-MM-dd'T'00:00:00.000'Z'");
+        const endDate = format(today, "yyyy-MM-dd'T'23:59:59.999'Z'");
+
+        // Fetch today's credit sales
+        const { data: salesData, error: salesError } = await supabase
+          .from('credit_sales')
+          .select('amount')
+          .gte('date', startDate)
+          .lte('date', endDate);
+        if (salesError) throw salesError;
+        const totalSalesToday = salesData?.reduce((sum, sale) => sum + sale.amount, 0) || 0;
+
+        // Fetch today's deposits
+        const { data: depositsData, error: depositsError } = await supabase
+          .from('deposits')
+          .select('amount')
+          .gte('date', startDate)
+          .lte('date', endDate);
+        if (depositsError) throw depositsError;
+        const cashDepositsToday = depositsData?.reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
+        
+        // Fetch today's expenses
+        const { data: expensesData, error: expensesError } = await supabase
+          .from('expenses')
+          .select('amount')
+          .gte('date', startDate)
+          .lte('date', endDate);
+        if (expensesError) throw expensesError;
+        const cashExpensesToday = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+
+        // Fetch outstanding customer credit
+        const { data: creditData, error: creditError } = await supabase
+          .from('credit_sales')
+          .select('amount, status')
+          .in('status', ['Pending', 'Overdue']);
+        if (creditError) throw creditError;
+        const outstandingCustomerCredit = creditData?.reduce((sum, sale) => sum + sale.amount, 0) || 0;
+        const activeDebtorsCount = creditData?.length || 0;
+
+
+        setStats({
+          totalSalesToday,
+          cashDepositsToday,
+          cashExpensesToday,
+          outstandingCustomerCredit,
+        });
+
+      } catch (error: any) {
+        toast({
+          title: "Error fetching dashboard data",
+          description: error.message,
+          variant: "destructive",
+        });
+        setStats(initialStats); // Reset to initial on error
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [toast]);
+
+  const dailyRevenue = { // Keeping structure similar for StatCard compatibility
+    total: formatCurrency(stats.totalSalesToday), // Using total sales as "Total Revenue (Today)" for now
+    cashAtHand: "$0.00", // Placeholder
+    cashReceived: formatCurrency(stats.cashDepositsToday),
+    cashPaidOut: formatCurrency(stats.cashExpensesToday),
+    cashOwing: formatCurrency(stats.outstandingCustomerCredit),
+    cashOwed: "$0.00", // Placeholder
+  };
+  
+  const activeDebtorsCount = stats.outstandingCustomerCredit > 0 ? 
+    (isLoading ? 'Loading...' : `from ${
+        // Quick fetch for count of distinct customers with pending/overdue sales.
+        // This is a simplified count. A more robust approach might involve a separate query.
+        (async () => {
+            const { count } = await supabase
+                .from('credit_sales')
+                .select('customer_name', { count: 'exact', head: true })
+                .in('status', ['Pending', 'Overdue']);
+            return count || 0;
+        })()
+    } debtors`) : '0 Active Debtors';
+
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-4 text-lg font-semibold">Loading Dashboard Data...</p>
+      </div>
+    );
+  }
 
   return (
     <>
-      <PageTitle title="Dashboard" subtitle="Daily overview of hotel operations and revenue." icon={DollarSign}>
+      <PageTitle title="Dashboard" subtitle="Overview of hotel operations and revenue." icon={DollarSign}>
         <Button disabled>View Full Report</Button>
       </PageTitle>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-6">
         <StatCard
-          title="Total Revenue (Today)"
+          title="Total Sales Value (Today)"
           value={dailyRevenue.total}
           icon={TrendingUp}
-          description="N/A"
+          description="Based on credit sales"
           className="bg-gradient-to-r from-green-500/10 to-green-600/10 border-green-500"
         />
         <StatCard
-          title="Cash at Hand"
-          value={dailyRevenue.cashAtHand}
+          title="Cash Deposits (Today)"
+          value={dailyRevenue.cashReceived}
           icon={Landmark}
-          description="N/A"
+          description="Total deposits recorded"
           className="bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500"
         />
         <StatCard
-          title="Cash Received (Today)"
-          value={dailyRevenue.cashReceived}
-          icon={TrendingUp}
-          description="N/A"
-           className="bg-gradient-to-r from-sky-500/10 to-sky-600/10 border-sky-500"
-        />
-        <StatCard
-          title="Cash Paid Out (Today)"
+          title="Cash Expenses (Today)"
           value={dailyRevenue.cashPaidOut}
           icon={TrendingDown}
-          description="N/A"
-          className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500"
+          description="Total expenses paid"
+           className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500"
         />
         <StatCard
-          title="Cash Owing (Debtors)"
+          title="Outstanding Customer Credit"
           value={dailyRevenue.cashOwing}
           icon={Users}
-          description="0 Active Debtors"
+          description={activeDebtorsCount.toString()} // Simplified, consider fetching actual count
            className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500"
         />
          <StatCard
-          title="Cash Owed (Creditors)"
+          title="Cash at Hand"
+          value={dailyRevenue.cashAtHand}
+          icon={DollarSign}
+          description="Calculation pending"
+           className="bg-gradient-to-r from-sky-500/10 to-sky-600/10 border-sky-500"
+        />
+         <StatCard
+          title="Cash Owed (to Creditors)"
           value={dailyRevenue.cashOwed}
           icon={AlertTriangle}
-          description="0 Active Creditors"
+          description="Tracking pending"
            className="bg-gradient-to-r from-red-500/10 to-red-600/10 border-red-500"
         />
       </div>
@@ -80,7 +197,7 @@ export default function DashboardPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline">Revenue Breakdown</CardTitle>
-            <CardDescription className="font-body">Performance of different revenue streams today.</CardDescription>
+            <CardDescription className="font-body">Performance of different revenue streams today (Placeholder).</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -114,7 +231,7 @@ export default function DashboardPage() {
           </CardContent>
           <CardFooter>
              <p className="text-xs text-muted-foreground font-body flex items-center">
-                <Info className="w-3 h-3 mr-1.5" /> Data updates periodically.
+                <Info className="w-3 h-3 mr-1.5" /> Data updates on page load.
              </p>
           </CardFooter>
         </Card>
@@ -122,7 +239,7 @@ export default function DashboardPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline">Quick Actions</CardTitle>
-             <CardDescription className="font-body">Common tasks at your fingertips.</CardDescription>
+             <CardDescription className="font-body">Common tasks at your fingertips (Placeholder).</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Button variant="default" size="lg" disabled>Add New Reservation</Button>
