@@ -46,6 +46,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 type CreditStatus = 'Pending' | 'Paid' | 'Overdue';
+type Currency = 'USD' | 'SSP';
 
 export interface CreditSale {
   id: string;
@@ -53,6 +54,7 @@ export interface CreditSale {
   item_service: string;
   details?: string;
   amount: number;
+  currency: Currency; // Added currency
   date: string; // Store as ISO string
   due_date?: string; // Store as ISO string
   status: CreditStatus;
@@ -70,7 +72,7 @@ export default function CreditPage() {
   const [creditSales, setCreditSales] = useState<CreditSale[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSale, setEditingSale] = useState<CreditSale | null>(null);
-  const [currentSale, setCurrentSale] = useState<Partial<FormCreditSale>>({ date: new Date(), status: 'Pending' });
+  const [currentSale, setCurrentSale] = useState<Partial<FormCreditSale>>({ date: new Date(), status: 'Pending', currency: 'USD' });
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
@@ -107,16 +109,20 @@ export default function CreditPage() {
     setCurrentSale(prev => ({ ...prev, status: value as CreditStatus }));
   };
 
+  const handleCurrencyChange = (value: string) => {
+    setCurrentSale(prev => ({ ...prev, currency: value as Currency }));
+  };
+
   const resetForm = () => {
     setEditingSale(null);
-    setCurrentSale({ date: new Date(), status: 'Pending' });
+    setCurrentSale({ date: new Date(), status: 'Pending', currency: 'USD' });
     setIsModalOpen(false);
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentSale.customer_name || !currentSale.item_service || !currentSale.amount || !currentSale.date) {
-      toast({ title: "Missing fields", description: "Please fill all required fields for the credit sale.", variant: "destructive" });
+    if (!currentSale.customer_name || !currentSale.item_service || !currentSale.amount || !currentSale.date || !currentSale.currency) {
+      toast({ title: "Missing fields", description: "Please fill all required fields for the credit sale, including currency.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
@@ -126,6 +132,7 @@ export default function CreditPage() {
       item_service: currentSale.item_service!,
       details: currentSale.details,
       amount: currentSale.amount!,
+      currency: currentSale.currency!,
       date: currentSale.date!.toISOString(),
       due_date: currentSale.due_date ? currentSale.due_date.toISOString() : undefined,
       status: currentSale.status || 'Pending',
@@ -166,13 +173,14 @@ export default function CreditPage() {
       ...sale,
       date: sale.date ? parseISO(sale.date) : new Date(),
       due_date: sale.due_date ? parseISO(sale.due_date) : undefined,
+      currency: sale.currency || 'USD', // Ensure currency is set
     });
     setIsModalOpen(true);
   };
 
   const openNewSaleModal = () => {
     setEditingSale(null);
-    setCurrentSale({ date: new Date(), status: 'Pending' });
+    setCurrentSale({ date: new Date(), status: 'Pending', currency: 'USD' });
     setIsModalOpen(true);
   };
   
@@ -193,6 +201,8 @@ export default function CreditPage() {
   };
 
   const markAsPaid = async (saleId: string) => {
+    // This function will be enhanced later for the "Record Full Payment" dialog.
+    // For now, it just updates the status.
     setIsSubmitting(true);
     const { error } = await supabase
       .from('credit_sales')
@@ -246,10 +256,20 @@ export default function CreditPage() {
               <Label htmlFor="details" className="font-body">Details (Optional)</Label>
               <Textarea id="details" name="details" value={currentSale.details || ''} onChange={handleInputChange} disabled={isSubmitting}/>
             </div>
-             <div className="grid grid-cols-2 gap-4">
+             <div className="grid grid-cols-3 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="amount" className="font-body">Amount</Label>
                     <Input id="amount" name="amount" type="number" value={currentSale.amount || ''} onChange={handleInputChange} required disabled={isSubmitting}/>
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="currency" className="font-body">Currency</Label>
+                    <Select value={currentSale.currency} onValueChange={handleCurrencyChange} disabled={isSubmitting}>
+                        <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                        <SelectContent>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="SSP">SSP</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="status" className="font-body">Status</Label>
@@ -317,6 +337,7 @@ export default function CreditPage() {
                   <TableHead className="font-body">Customer</TableHead>
                   <TableHead className="font-body">Item/Service</TableHead>
                   <TableHead className="font-body">Amount</TableHead>
+                  <TableHead className="font-body">Currency</TableHead>
                   <TableHead className="font-body">Date</TableHead>
                   <TableHead className="font-body">Due Date</TableHead>
                   <TableHead className="font-body">Status</TableHead>
@@ -328,7 +349,8 @@ export default function CreditPage() {
                   <TableRow key={sale.id}>
                     <TableCell className="font-semibold font-body">{sale.customer_name}</TableCell>
                     <TableCell className="font-body">{sale.item_service}</TableCell>
-                    <TableCell className="font-body">${sale.amount.toFixed(2)}</TableCell>
+                    <TableCell className="font-body">{sale.amount.toFixed(2)}</TableCell>
+                    <TableCell className="font-body">{sale.currency}</TableCell>
                     <TableCell className="font-body">{format(parseISO(sale.date), "PP")}</TableCell>
                     <TableCell className="font-body">{sale.due_date ? format(parseISO(sale.due_date), "PP") : 'N/A'}</TableCell>
                     <TableCell><Badge variant={getStatusBadgeVariant(sale.status)} className="font-body">{sale.status}</Badge></TableCell>
@@ -367,7 +389,7 @@ export default function CreditPage() {
                   </TableRow>
                 )) : (
                    <TableRow>
-                      <TableCell colSpan={7} className="text-center font-body h-24">No credit sales recorded yet.</TableCell>
+                      <TableCell colSpan={8} className="text-center font-body h-24">No credit sales recorded yet.</TableCell>
                    </TableRow>
                 )}
               </TableBody>

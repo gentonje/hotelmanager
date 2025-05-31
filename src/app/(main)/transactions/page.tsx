@@ -28,11 +28,28 @@ import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 // Import existing interfaces
 import type { Bank } from '@/app/(main)/banks/page';
 import type { Customer } from '@/app/(main)/customers/page';
-import type { CreditSale, CreditStatus } from '@/app/(main)/credit/page';
+// Make CreditSale interface directly available or redefine minimally for transactions
+// import type { CreditSale, CreditStatus } from '@/app/(main)/credit/page'; 
 import type { Deposit } from '@/app/(main)/deposits/page';
 
 type TransactionType = 'cash_sale' | 'credit_sale' | 'deposit' | '';
 type Currency = 'USD' | 'SSP';
+type CreditStatus = 'Pending' | 'Paid' | 'Overdue';
+
+// Redefine CreditSale related types here if not importing directly to avoid circular deps or simplify
+interface TransactionCreditSale {
+  id: string;
+  customer_name: string;
+  item_service: string;
+  details?: string;
+  amount: number;
+  currency: Currency; // Added currency
+  date: string; // ISO string
+  due_date?: string; // ISO string
+  status: CreditStatus;
+  created_at?: string;
+  updated_at?: string;
+}
 
 export interface CashSale {
   id: string;
@@ -51,7 +68,7 @@ interface FormCashSale extends Omit<CashSale, 'date' | 'id'> {
   due_date_for_balance?: Date; // For shortfall scenario
 }
 
-interface FormCreditSaleState extends Omit<CreditSale, 'id' | 'date' | 'due_date' | 'created_at' | 'updated_at'> {
+interface FormCreditSaleState extends Omit<TransactionCreditSale, 'id' | 'date' | 'due_date' | 'created_at' | 'updated_at'> {
   date: Date;
   due_date?: Date;
 }
@@ -75,7 +92,7 @@ export default function TransactionsPage() {
 
   // Form states
   const [cashSaleData, setCashSaleData] = useState<Partial<FormCashSale>>({ date: new Date(), amount: 0 });
-  const [creditSaleData, setCreditSaleData] = useState<Partial<FormCreditSaleState>>({ date: new Date(), status: 'Pending', amount: 0 });
+  const [creditSaleData, setCreditSaleData] = useState<Partial<FormCreditSaleState>>({ date: new Date(), status: 'Pending', amount: 0, currency: 'USD' });
   const [depositData, setDepositData] = useState<Partial<FormDepositState>>({ date: new Date(), currency: 'USD', amount: 0 });
   
   const fetchDropdownData = async () => {
@@ -117,14 +134,14 @@ export default function TransactionsPage() {
       const current = new URL(window.location.toString());
       current.searchParams.delete('newCustomerName');
       current.searchParams.delete('newCustomerOrigin');
-      router.replace(current.pathname + current.search, undefined);
+      router.replace(current.pathname + current.search, { shallow: true });
     }
   }, [searchParams, customersList, selectedType, router, pathname]);
 
 
   const resetAllForms = () => {
     setCashSaleData({ date: new Date(), amount: 0, item_service: '', details: '', customer_name: '', amount_tendered: undefined, due_date_for_balance: undefined });
-    setCreditSaleData({ date: new Date(), status: 'Pending', amount: 0, customer_name: '', item_service: '', details: '' });
+    setCreditSaleData({ date: new Date(), status: 'Pending', amount: 0, currency: 'USD', customer_name: '', item_service: '', details: '' });
     setDepositData({ date: new Date(), currency: 'USD', amount: 0, bank: '', reference_no: '', deposited_by: '', description: '' });
   };
   
@@ -198,11 +215,14 @@ export default function TransactionsPage() {
           const creditAmount = cashSaleData.amount! - (cashSaleData.amount_tendered || 0);
           const creditDetails = `Original Item: ${cashSaleData.item_service}. Sale Amount: ${cashSaleData.amount}. Tendered: ${cashSaleData.amount_tendered || 0}. Balance Due: ${creditAmount.toFixed(2)}. Notes: ${cashSaleData.details || ''}`;
           
-          const creditToSave: Omit<CreditSale, 'id' | 'created_at' | 'updated_at'> = {
+          // Assume default currency 'USD' for shortfall credit for now
+          // Ideally, cash sale should also have a currency if it's multi-currency
+          const creditToSave: Omit<TransactionCreditSale, 'id' | 'created_at' | 'updated_at'> = {
             customer_name: cashSaleData.customer_name!,
             item_service: "Balance from Cash Sale",
             details: creditDetails,
             amount: creditAmount,
+            currency: 'USD', // Defaulting or could be from a cash sale currency field if added
             date: cashSaleData.date.toISOString(),
             due_date: cashSaleData.due_date_for_balance.toISOString(),
             status: 'Pending',
@@ -210,7 +230,7 @@ export default function TransactionsPage() {
           const { error: insertCreditError } = await supabase.from('credit_sales').insert([{ ...creditToSave, id: `cred_${Date.now()}` }]);
           error = insertCreditError;
           if (!error) {
-            toast({ title: `Credit Sale Created`, description: `Outstanding balance of $${creditAmount.toFixed(2)} recorded for ${cashSaleData.customer_name}.`, variant: "default" });
+            toast({ title: `Credit Sale Created`, description: `Outstanding balance of ${creditToSave.currency} ${creditAmount.toFixed(2)} recorded for ${cashSaleData.customer_name}.`, variant: "default" });
             resetAllForms();
           }
 
@@ -230,15 +250,16 @@ export default function TransactionsPage() {
           }
         }
       } else if (selectedType === 'credit_sale') {
-        if (!creditSaleData.customer_name || !creditSaleData.item_service || !creditSaleData.amount || !creditSaleData.date || !creditSaleData.status) {
-           toast({ title: "Missing fields", description: "Please fill all required credit sale fields.", variant: "destructive" });
+        if (!creditSaleData.customer_name || !creditSaleData.item_service || !creditSaleData.amount || !creditSaleData.date || !creditSaleData.status || !creditSaleData.currency) {
+           toast({ title: "Missing fields", description: "Please fill all required credit sale fields, including currency.", variant: "destructive" });
            setIsSubmitting(false); return;
         }
-        const saleToSave: Omit<CreditSale, 'id' | 'created_at' | 'updated_at'> = {
+        const saleToSave: Omit<TransactionCreditSale, 'id' | 'created_at' | 'updated_at'> = {
             customer_name: creditSaleData.customer_name!,
             item_service: creditSaleData.item_service!,
             details: creditSaleData.details,
             amount: creditSaleData.amount!,
+            currency: creditSaleData.currency!,
             date: creditSaleData.date!.toISOString(),
             due_date: creditSaleData.due_date ? creditSaleData.due_date.toISOString() : undefined,
             status: creditSaleData.status! as CreditStatus,
@@ -380,7 +401,6 @@ export default function TransactionsPage() {
                         <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer (Optional)"} />
                     </SelectTrigger>
                     <SelectContent>
-                        {/* No explicit "None" item with empty value. Placeholder handles it. */}
                         {isLoading && <SelectItem value="_LOADING_CUST_OPT_" disabled>Loading customers...</SelectItem>}
                         {!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_OPT_" disabled>No customers found</SelectItem>}
                         {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
@@ -440,10 +460,20 @@ export default function TransactionsPage() {
               <Label htmlFor="credit_details">Details (Optional)</Label>
               <Textarea id="credit_details" name="details" value={creditSaleData.details || ''} onChange={(e) => handleInputChange('credit', e)} disabled={isSubmitting}/>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4"> {/* Changed to grid-cols-3 */}
                 <div className="grid gap-2">
                     <Label htmlFor="credit_amount">Amount</Label>
                     <Input id="credit_amount" name="amount" type="number" value={creditSaleData.amount || ''} onChange={(e) => handleInputChange('credit', e)} required disabled={isSubmitting} step="0.01"/>
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="credit_currency">Currency</Label>
+                    <Select value={creditSaleData.currency || 'USD'} onValueChange={(value) => handleSelectChange('credit', 'currency', value as Currency)} disabled={isSubmitting}>
+                        <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                        <SelectContent>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="SSP">SSP</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="credit_status">Status</Label>
