@@ -32,7 +32,6 @@ interface RevenueBreakdown {
   ssp: number;
 }
 
-// Expand RevenueCategoryStats to include all new categories
 export interface RevenueCategoryStats {
   rooms: RevenueBreakdown;
   mainBar: RevenueBreakdown;
@@ -40,7 +39,7 @@ export interface RevenueCategoryStats {
   conferenceHalls: RevenueBreakdown;
   internetServices: RevenueBreakdown;
   swimmingPool: RevenueBreakdown;
-  otherRevenue: RevenueBreakdown; // For items categorized as 'Other' or unmapped
+  otherRevenue: RevenueBreakdown;
 }
 
 interface DashboardStats {
@@ -63,6 +62,8 @@ const initialRevenueBreakdown: RevenueBreakdown = { usd: 0, ssp: 0 };
 const initialStats: DashboardStats = {
   totalCreditSalesOriginatedUSD: 0,
   totalCreditSalesOriginatedSSP: 0,
+  cashSalesReceivedUSD: 0,
+  cashSalesReceivedSSP: 0,
   cashDepositsUSD: 0,
   cashDepositsSSP: 0,
   cashExpensesUSD: 0,
@@ -70,8 +71,6 @@ const initialStats: DashboardStats = {
   outstandingCustomerCreditUSD: 0,
   outstandingCustomerCreditSSP: 0,
   activeDebtorsCount: 0,
-  cashSalesReceivedUSD: 0,
-  cashSalesReceivedSSP: 0,
   revenueByCategory: {
     rooms: { ...initialRevenueBreakdown },
     mainBar: { ...initialRevenueBreakdown },
@@ -83,7 +82,6 @@ const initialStats: DashboardStats = {
   },
 };
 
-// Mapping from RevenueCategory type values to keys in RevenueCategoryStats
 const categoryMap: Record<RevenueCategory, keyof RevenueCategoryStats> = {
   'Rooms': 'rooms',
   'Main Bar': 'mainBar',
@@ -153,7 +151,7 @@ export default function DashboardPage() {
 
       const { data: cashSalesData, error: cashSalesError } = await supabase
         .from('cash_sales')
-        .select('amount, currency, revenue_category') // Added revenue_category
+        .select('amount, currency, revenue_category')
         .gte('date', startDateISO)
         .lte('date', endDateISO);
       if (cashSalesError) throw cashSalesError;
@@ -167,21 +165,21 @@ export default function DashboardPage() {
           if (revenueByCategoryUpdate[mappedCategoryKey]) {
             revenueByCategoryUpdate[mappedCategoryKey].usd += sale.amount;
           } else {
-            revenueByCategoryUpdate.otherRevenue.usd += sale.amount; // Fallback
+            revenueByCategoryUpdate.otherRevenue.usd += sale.amount;
           }
         } else if (sale.currency === 'SSP') {
           cashSalesReceivedSSP += sale.amount;
            if (revenueByCategoryUpdate[mappedCategoryKey]) {
             revenueByCategoryUpdate[mappedCategoryKey].ssp += sale.amount;
           } else {
-            revenueByCategoryUpdate.otherRevenue.ssp += sale.amount; // Fallback
+            revenueByCategoryUpdate.otherRevenue.ssp += sale.amount;
           }
         }
       });
       
       const { data: creditSalesData, error: creditSalesError } = await supabase
         .from('credit_sales')
-        .select('original_amount, currency, revenue_category') // Added revenue_category
+        .select('original_amount, currency, revenue_category')
         .gte('date', startDateISO) 
         .lte('date', endDateISO);
       if (creditSalesError) throw creditSalesError;
@@ -222,7 +220,6 @@ export default function DashboardPage() {
         .gte('date', startDateISO) 
         .lte('date', endDateISO);   
       if (expensesError) throw expensesError;
-      // Assuming expenses are only in USD for now as expenses table has no currency column
       const cashExpensesUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
       const cashExpensesSSP = 0; 
 
@@ -279,8 +276,7 @@ export default function DashboardPage() {
     : 'No outstanding credit (Overall)';
 
   const totalCategorizedRevenueUSD = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.usd, 0);
-  // const totalCategorizedRevenueSSP = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.ssp, 0);
-  const totalCategorizedRevenueOverall = totalCategorizedRevenueUSD; //  + totalCategorizedRevenueSSP; Progress bar based on USD
+  const totalCategorizedRevenueOverall = totalCategorizedRevenueUSD;
 
 
   if (isLoading && stats === initialStats) { 
@@ -403,7 +399,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1">
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline">Revenue Breakdown ({periodDescription.replace('for ', '')})</CardTitle>
@@ -456,5 +452,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
-    
