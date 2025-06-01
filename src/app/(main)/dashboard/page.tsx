@@ -6,8 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { StatCard } from "@/components/shared/stat-card";
-// Button import was removed by previous fix, re-adding if still needed, though not directly used in this diff, good practice to keep imports clean
-// import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -15,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DollarSign, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText, BedDouble, GlassWater, Utensils, Presentation, CalendarDays } from "lucide-react";
+import { DollarSign, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText, BedDouble, GlassWater, Utensils, Presentation, CalendarDays, Wifi, Waves, MoreHorizontal } from "lucide-react"; // Added Wifi, Waves, MoreHorizontal
 import {
   Card,
   CardContent,
@@ -26,17 +25,22 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
+import type { RevenueCategory } from '@/app/(main)/transactions/page';
 
 interface RevenueBreakdown {
   usd: number;
   ssp: number;
 }
 
-interface RevenueCategoryStats {
+// Expand RevenueCategoryStats to include all new categories
+export interface RevenueCategoryStats {
   rooms: RevenueBreakdown;
   mainBar: RevenueBreakdown;
   restaurant: RevenueBreakdown;
   conferenceHalls: RevenueBreakdown;
+  internetServices: RevenueBreakdown;
+  swimmingPool: RevenueBreakdown;
+  otherRevenue: RevenueBreakdown; // For items categorized as 'Other' or unmapped
 }
 
 interface DashboardStats {
@@ -73,24 +77,21 @@ const initialStats: DashboardStats = {
     mainBar: { ...initialRevenueBreakdown },
     restaurant: { ...initialRevenueBreakdown },
     conferenceHalls: { ...initialRevenueBreakdown },
+    internetServices: { ...initialRevenueBreakdown },
+    swimmingPool: { ...initialRevenueBreakdown },
+    otherRevenue: { ...initialRevenueBreakdown },
   },
 };
 
-const revenueCategoryKeywords = {
-  rooms: /\b(room|stay|accommodation|suite|lodge|guest)\b/i,
-  mainBar: /\b(bar|drink|beverage|soda|juice|water|beer|wine|spirit)\b/i, // Note: 'water' might overlap with rooms if water bottles are sold as room items
-  restaurant: /\b(food|meal|restaurant|dining|breakfast|lunch|dinner|dish|plate|cuisine)\b/i,
-  conferenceHalls: /\b(conference|hall|meeting|event space|seminar|workshop)\b/i,
-};
-
-const categorizeItem = (itemService: string): keyof RevenueCategoryStats | null => {
-  if (!itemService) return null;
-  for (const category in revenueCategoryKeywords) {
-    if (revenueCategoryKeywords[category as keyof RevenueCategoryStats].test(itemService)) {
-      return category as keyof RevenueCategoryStats;
-    }
-  }
-  return null;
+// Mapping from RevenueCategory type values to keys in RevenueCategoryStats
+const categoryMap: Record<RevenueCategory, keyof RevenueCategoryStats> = {
+  'Rooms': 'rooms',
+  'Main Bar': 'mainBar',
+  'Restaurant': 'restaurant',
+  'Conference Halls': 'conferenceHalls',
+  'Internet Services': 'internetServices',
+  'Swimming Pool': 'swimmingPool',
+  'Other': 'otherRevenue',
 };
 
 type PeriodOption = 'today' | 'thisMonth' | 'thisYear';
@@ -131,7 +132,7 @@ export default function DashboardPage() {
   };
 
   const fetchDashboardData = useCallback(async (isInitialLoad: boolean = false) => {
-    if (isInitialLoad && isLoading) { // Ensure setIsLoading(true) is only called for the very first load
+    if (isInitialLoad && isLoading) { 
       // setIsLoading(true) is managed by useEffect initial load
     }
 
@@ -145,11 +146,14 @@ export default function DashboardPage() {
         mainBar: { usd: 0, ssp: 0 },
         restaurant: { usd: 0, ssp: 0 },
         conferenceHalls: { usd: 0, ssp: 0 },
+        internetServices: { usd: 0, ssp: 0 },
+        swimmingPool: { usd: 0, ssp: 0 },
+        otherRevenue: { usd: 0, ssp: 0 },
       };
 
       const { data: cashSalesData, error: cashSalesError } = await supabase
         .from('cash_sales')
-        .select('amount, currency, item_service')
+        .select('amount, currency, revenue_category') // Added revenue_category
         .gte('date', startDateISO)
         .lte('date', endDateISO);
       if (cashSalesError) throw cashSalesError;
@@ -157,19 +161,27 @@ export default function DashboardPage() {
       let cashSalesReceivedUSD = 0;
       let cashSalesReceivedSSP = 0;
       cashSalesData?.forEach(sale => {
-        const category = categorizeItem(sale.item_service);
+        const mappedCategoryKey = sale.revenue_category ? categoryMap[sale.revenue_category as RevenueCategory] : 'otherRevenue';
         if (sale.currency === 'USD') {
           cashSalesReceivedUSD += sale.amount;
-          if (category) revenueByCategoryUpdate[category].usd += sale.amount;
+          if (revenueByCategoryUpdate[mappedCategoryKey]) {
+            revenueByCategoryUpdate[mappedCategoryKey].usd += sale.amount;
+          } else {
+            revenueByCategoryUpdate.otherRevenue.usd += sale.amount; // Fallback
+          }
         } else if (sale.currency === 'SSP') {
           cashSalesReceivedSSP += sale.amount;
-          if (category) revenueByCategoryUpdate[category].ssp += sale.amount;
+           if (revenueByCategoryUpdate[mappedCategoryKey]) {
+            revenueByCategoryUpdate[mappedCategoryKey].ssp += sale.amount;
+          } else {
+            revenueByCategoryUpdate.otherRevenue.ssp += sale.amount; // Fallback
+          }
         }
       });
       
       const { data: creditSalesData, error: creditSalesError } = await supabase
         .from('credit_sales')
-        .select('original_amount, currency, item_service')
+        .select('original_amount, currency, revenue_category') // Added revenue_category
         .gte('date', startDateISO) 
         .lte('date', endDateISO);
       if (creditSalesError) throw creditSalesError;
@@ -177,13 +189,21 @@ export default function DashboardPage() {
       let totalCreditSalesOriginatedUSD = 0;
       let totalCreditSalesOriginatedSSP = 0;
       creditSalesData?.forEach(sale => {
-        const category = categorizeItem(sale.item_service);
+        const mappedCategoryKey = sale.revenue_category ? categoryMap[sale.revenue_category as RevenueCategory] : 'otherRevenue';
         if (sale.currency === 'USD') {
           totalCreditSalesOriginatedUSD += sale.original_amount;
-          if (category) revenueByCategoryUpdate[category].usd += sale.original_amount;
+           if (revenueByCategoryUpdate[mappedCategoryKey]) {
+            revenueByCategoryUpdate[mappedCategoryKey].usd += sale.original_amount;
+          } else {
+             revenueByCategoryUpdate.otherRevenue.usd += sale.original_amount;
+          }
         } else if (sale.currency === 'SSP') {
           totalCreditSalesOriginatedSSP += sale.original_amount;
-          if (category) revenueByCategoryUpdate[category].ssp += sale.original_amount;
+          if (revenueByCategoryUpdate[mappedCategoryKey]) {
+            revenueByCategoryUpdate[mappedCategoryKey].ssp += sale.original_amount;
+          } else {
+            revenueByCategoryUpdate.otherRevenue.ssp += sale.original_amount;
+          }
         }
       });
       
@@ -202,6 +222,7 @@ export default function DashboardPage() {
         .gte('date', startDateISO) 
         .lte('date', endDateISO);   
       if (expensesError) throw expensesError;
+      // Assuming expenses are only in USD for now as expenses table has no currency column
       const cashExpensesUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
       const cashExpensesSSP = 0; 
 
@@ -246,7 +267,7 @@ export default function DashboardPage() {
   }, [toast, isLoading, selectedPeriod]); 
 
   useEffect(() => {
-    setIsLoading(true); // Set loading true for initial fetch or period change
+    setIsLoading(true); 
     fetchDashboardData(true); 
     const intervalId = setInterval(() => fetchDashboardData(false), 60000); 
     return () => clearInterval(intervalId);
@@ -258,8 +279,8 @@ export default function DashboardPage() {
     : 'No outstanding credit (Overall)';
 
   const totalCategorizedRevenueUSD = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.usd, 0);
-  const totalCategorizedRevenueSSP = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.ssp, 0);
-  const totalCategorizedRevenueOverall = totalCategorizedRevenueUSD + totalCategorizedRevenueSSP;
+  // const totalCategorizedRevenueSSP = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.ssp, 0);
+  const totalCategorizedRevenueOverall = totalCategorizedRevenueUSD; //  + totalCategorizedRevenueSSP; Progress bar based on USD
 
 
   if (isLoading && stats === initialStats) { 
@@ -276,6 +297,9 @@ export default function DashboardPage() {
     { name: "Main Bar", values: stats.revenueByCategory.mainBar, icon: GlassWater, colorClass: "[&>div]:bg-green-500" },
     { name: "Restaurant", values: stats.revenueByCategory.restaurant, icon: Utensils, colorClass: "[&>div]:bg-orange-500" },
     { name: "Conference Halls", values: stats.revenueByCategory.conferenceHalls, icon: Presentation, colorClass: "[&>div]:bg-purple-500" },
+    { name: "Internet Services", values: stats.revenueByCategory.internetServices, icon: Wifi, colorClass: "[&>div]:bg-sky-500" },
+    { name: "Swimming Pool", values: stats.revenueByCategory.swimmingPool, icon: Waves, colorClass: "[&>div]:bg-teal-500" },
+    { name: "Other Revenue", values: stats.revenueByCategory.otherRevenue, icon: MoreHorizontal, colorClass: "[&>div]:bg-gray-500" },
   ];
 
   const periodDescription = getPeriodDates(selectedPeriod).description;
@@ -344,11 +368,11 @@ export default function DashboardPage() {
           value={
             <>
               <div>{formatCurrency(stats.cashExpensesUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.cashExpensesSSP, 'SSP')}</div> {/* SSP Expenses still 0 for now */}
+              <div>{formatCurrency(stats.cashExpensesSSP, 'SSP')}</div>
             </>
           }
           icon={TrendingDown}
-          description={`Total expenses ${periodDescription} (SSP not tracked)`}
+          description={`Total expenses ${periodDescription} (SSP not tracked for expenses)`}
            className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500"
         />
         <StatCard
@@ -382,11 +406,11 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline">Revenue Breakdown ({selectedPeriod.replace('this', 'This ')})</CardTitle>
-            <CardDescription className="font-body">Performance of revenue streams (USD & SSP) {periodDescription}.</CardDescription>
+            <CardTitle className="font-headline">Revenue Breakdown ({periodDescription.replace('for ', '')})</CardTitle>
+            <CardDescription className="font-body">Performance of revenue streams {periodDescription}.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {revenueCategoriesDisplay.map(category => (
+            {revenueCategoriesDisplay.filter(category => category.values.usd > 0 || category.values.ssp > 0).map(category => (
               <div key={category.name}>
                 <div className="mb-1 flex justify-between items-center">
                   <span className="text-sm font-medium font-body flex items-center">
@@ -405,13 +429,13 @@ export default function DashboardPage() {
                 />
               </div>
             ))}
-             {totalCategorizedRevenueOverall === 0 && (
+             {totalCategorizedRevenueOverall === 0 && stats.revenueByCategory.otherRevenue.usd === 0 && stats.revenueByCategory.otherRevenue.ssp === 0 && ( // Check all categories
                 <p className="text-sm text-muted-foreground text-center py-4">No categorized revenue recorded for this period.</p>
             )}
           </CardContent>
           <CardFooter>
              <p className="text-xs text-muted-foreground font-body flex items-center">
-                <Info className="w-3 h-3 mr-1.5" /> Dashboard data updates periodically. Categorization is based on 'item_service' keywords.
+                <Info className="w-3 h-3 mr-1.5" /> Dashboard data updates periodically. Categorization based on transaction entry.
              </p>
           </CardFooter>
         </Card>
@@ -422,11 +446,10 @@ export default function DashboardPage() {
              <CardDescription className="font-body">Common tasks at your fingertips.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* These buttons are illustrative and currently disabled */}
-            <button className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-11 px-8" disabled>Add New Reservation</button>
-            <button className="border border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-11 px-8" disabled>Record Expense</button>
-            <button className="border border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-11 px-8" disabled>Update Inventory</button>
-            <button className="bg-secondary text-secondary-foreground hover:bg-secondary/80 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-11 px-8" disabled>Generate Daily Summary</button>
+            <Button variant="default" size="lg" disabled>Add New Reservation</Button>
+            <Button variant="outline" size="lg" disabled>Record Expense</Button>
+            <Button variant="outline" size="lg" disabled>Update Inventory</Button>
+            <Button variant="secondary" size="lg" disabled>Generate Daily Summary</Button>
           </CardContent>
         </Card>
       </div>

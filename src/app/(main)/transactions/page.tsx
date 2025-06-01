@@ -19,8 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarIcon, ListChecks, Loader2, DollarSign, CreditCard, LandmarkIcon, PlusCircle } from "lucide-react";
-import { format, parseISO } from "date-fns";
+import { CalendarIcon, ListChecks, Loader2, DollarSign, CreditCard, LandmarkIcon, PlusCircle, LayoutGrid } from "lucide-react";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
@@ -33,6 +33,9 @@ import type { Deposit } from '@/app/(main)/deposits/page';
 type TransactionType = 'cash_sale' | 'credit_sale' | 'deposit' | '';
 type Currency = 'USD' | 'SSP';
 type CreditStatus = 'Pending' | 'Paid' | 'Overdue';
+export type RevenueCategory = 'Rooms' | 'Main Bar' | 'Restaurant' | 'Conference Halls' | 'Internet Services' | 'Swimming Pool' | 'Other';
+
+const revenueCategories: RevenueCategory[] = ['Rooms', 'Main Bar', 'Restaurant', 'Conference Halls', 'Internet Services', 'Swimming Pool', 'Other'];
 
 // Redefine CreditSale related types here if not importing directly to avoid circular deps or simplify
 interface TransactionCreditSale {
@@ -47,6 +50,7 @@ interface TransactionCreditSale {
   date: string; // ISO string
   due_date?: string; // ISO string
   status: CreditStatus;
+  revenue_category?: RevenueCategory;
   created_at?: string;
   updated_at?: string;
 }
@@ -59,18 +63,21 @@ export interface CashSale {
   amount: number;
   currency: Currency;
   customer_name?: string;
+  revenue_category?: RevenueCategory;
   created_at?: string;
   updated_at?: string;
 }
 
-interface FormCashSale extends Omit<CashSale, 'date' | 'id' | 'created_at' | 'updated_at'> {
+interface FormCashSale extends Omit<CashSale, 'date' | 'id' | 'created_at' | 'updated_at' | 'currency'> {
   date: Date;
+  currency: Currency;
   amount_tendered?: number;
   due_date_for_balance?: Date; // For shortfall scenario
 }
 
-interface FormCreditSaleState extends Omit<TransactionCreditSale, 'id' | 'date' | 'due_date' | 'created_at' | 'updated_at' | 'paid_amount' | 'balance_due'> {
+interface FormCreditSaleState extends Omit<TransactionCreditSale, 'id' | 'date' | 'due_date' | 'created_at' | 'updated_at' | 'paid_amount' | 'balance_due' | 'currency'> {
   date: Date;
+  currency: Currency;
   due_date?: Date;
 }
 
@@ -140,8 +147,8 @@ export default function TransactionsPage() {
 
 
   const resetAllForms = () => {
-    setCashSaleData({ date: new Date(), amount: 0, currency: 'USD', item_service: '', details: '', customer_name: '', amount_tendered: undefined, due_date_for_balance: undefined });
-    setCreditSaleData({ date: new Date(), status: 'Pending', original_amount: 0, currency: 'USD', customer_name: '', item_service: '', details: '' });
+    setCashSaleData({ date: new Date(), amount: 0, currency: 'USD', item_service: '', details: '', customer_name: '', amount_tendered: undefined, due_date_for_balance: undefined, revenue_category: undefined });
+    setCreditSaleData({ date: new Date(), status: 'Pending', original_amount: 0, currency: 'USD', customer_name: '', item_service: '', details: '', revenue_category: undefined });
     setDepositData({ date: new Date(), currency: 'USD', amount: 0, bank: '', reference_no: '', deposited_by: '', description: '' });
   };
   
@@ -168,14 +175,12 @@ export default function TransactionsPage() {
   };
   
   const handleSelectChange = (form: 'cash' | 'credit' | 'deposit', field: string, value: string) => {
-    if (form === 'cash') setCashSaleData(prev => ({ ...prev, [field]: field === 'currency' ? value as Currency : (value === "_NONE_" ? '' : value) }));
-    if (form === 'credit') setCreditSaleData(prev => ({ ...prev, [field]: value }));
+    const actualValue = value === "_NONE_" || value.startsWith("_SELECT_") ? '' : value;
+
+    if (form === 'cash') setCashSaleData(prev => ({ ...prev, [field]: field === 'revenue_category' ? actualValue as RevenueCategory : actualValue }));
+    if (form === 'credit') setCreditSaleData(prev => ({ ...prev, [field]: field === 'revenue_category' ? actualValue as RevenueCategory : actualValue }));
     if (form === 'deposit') {
-      if (field === 'deposited_by') {
-        setDepositData(prev => ({ ...prev, deposited_by: value }));
-      } else {
-        setDepositData(prev => ({ ...prev, [field]: value }));
-      }
+      setDepositData(prev => ({ ...prev, [field]: actualValue }));
     }
   };
 
@@ -197,10 +202,22 @@ export default function TransactionsPage() {
 
     try {
       if (selectedType === 'cash_sale') {
-        if (!cashSaleData.date || !cashSaleData.item_service || cashSaleData.amount === undefined || cashSaleData.amount <= 0 || !cashSaleData.currency) {
-          toast({ title: "Missing fields", description: "Date, Item/Service, Currency, and a valid Amount are required for cash sale.", variant: "destructive" });
+        if (!cashSaleData.date || !cashSaleData.item_service || cashSaleData.amount === undefined || cashSaleData.amount <= 0 || !cashSaleData.currency || !cashSaleData.revenue_category) {
+          toast({ title: "Missing fields", description: "Date, Item/Service, Revenue Category, Currency, and a valid Amount are required for cash sale.", variant: "destructive" });
           setIsSubmitting(false); return;
         }
+
+        const actualAmountReceived = cashSaleData.amount_tendered !== undefined && cashSaleData.amount_tendered < cashSaleData.amount! ? cashSaleData.amount_tendered : cashSaleData.amount!;
+
+        const cashRecordToSave: Omit<CashSale, 'id' | 'created_at' | 'updated_at'> = {
+          date: cashSaleData.date.toISOString(),
+          item_service: cashSaleData.item_service!,
+          details: cashSaleData.details,
+          amount: actualAmountReceived,
+          currency: cashSaleData.currency!,
+          customer_name: cashSaleData.customer_name || undefined,
+          revenue_category: cashSaleData.revenue_category,
+        };
 
         if (isShortfall) { 
           if (!cashSaleData.customer_name) {
@@ -212,12 +229,21 @@ export default function TransactionsPage() {
             setIsSubmitting(false); return;
           }
 
+          // First, save the cash portion
+          const { error: insertCashError } = await supabase.from('cash_sales').insert([{ ...cashRecordToSave, id: `cash_ps_${Date.now()}` }]);
+          if (insertCashError) {
+            toast({ title: `Error recording partial cash payment`, description: insertCashError.message, variant: "destructive" });
+            setIsSubmitting(false); return;
+          }
+          toast({ title: `Partial Cash Payment Recorded`, description: `Received ${cashRecordToSave.currency} ${cashRecordToSave.amount.toFixed(2)}.`, variant: "default" });
+
+
           const shortfallAmount = cashSaleData.amount! - (cashSaleData.amount_tendered || 0);
-          const creditDetails = `Original Item: ${cashSaleData.item_service}. Sale Amount: ${cashSaleData.currency} ${cashSaleData.amount}. Tendered: ${cashSaleData.currency} ${cashSaleData.amount_tendered || 0}. Balance Due: ${cashSaleData.currency} ${shortfallAmount.toFixed(2)}. Notes: ${cashSaleData.details || ''}`;
+          const creditDetails = `Original Item: ${cashSaleData.item_service}. Full Sale Amount: ${cashSaleData.currency} ${cashSaleData.amount}. Cash Tendered: ${cashSaleData.currency} ${cashSaleData.amount_tendered || 0}. Balance Due: ${cashSaleData.currency} ${shortfallAmount.toFixed(2)}. Notes: ${cashSaleData.details || ''}`;
           
           const creditToSave: Omit<TransactionCreditSale, 'id' | 'created_at' | 'updated_at'> = {
             customer_name: cashSaleData.customer_name!,
-            item_service: "Balance from Cash Sale",
+            item_service: `Balance from Cash Sale: ${cashSaleData.item_service}`,
             details: creditDetails,
             original_amount: shortfallAmount,
             paid_amount: 0,
@@ -226,24 +252,17 @@ export default function TransactionsPage() {
             date: cashSaleData.date.toISOString(),
             due_date: cashSaleData.due_date_for_balance.toISOString(),
             status: 'Pending',
+            revenue_category: cashSaleData.revenue_category, // Carry over category
           };
           const { error: insertCreditError } = await supabase.from('credit_sales').insert([{ ...creditToSave, id: `cred_sf_${Date.now()}` }]);
           error = insertCreditError;
           if (!error) {
-            toast({ title: `Credit Sale Created`, description: `Outstanding balance of ${creditToSave.currency} ${shortfallAmount.toFixed(2)} recorded for ${cashSaleData.customer_name}.`, variant: "default" });
+            toast({ title: `Credit Sale Created for Balance`, description: `Outstanding balance of ${creditToSave.currency} ${shortfallAmount.toFixed(2)} recorded for ${cashSaleData.customer_name}.`, variant: "default" });
             resetAllForms();
           }
 
-        } else { 
-          const saleToSave: Omit<CashSale, 'id' | 'created_at' | 'updated_at'> = {
-            date: cashSaleData.date.toISOString(),
-            item_service: cashSaleData.item_service!,
-            details: cashSaleData.details,
-            amount: cashSaleData.amount!,
-            currency: cashSaleData.currency!,
-            customer_name: cashSaleData.customer_name || undefined, 
-          };
-          const { error: insertCashError } = await supabase.from('cash_sales').insert([{ ...saleToSave, id: `cash_${Date.now()}` }]);
+        } else { // Full cash payment or overpayment (change given)
+          const { error: insertCashError } = await supabase.from('cash_sales').insert([{ ...cashRecordToSave, id: `cash_${Date.now()}` }]);
           error = insertCashError;
           if (!error) {
             toast({ title: "Cash Sale Recorded", variant: "default" });
@@ -251,8 +270,8 @@ export default function TransactionsPage() {
           }
         }
       } else if (selectedType === 'credit_sale') {
-        if (!creditSaleData.customer_name || !creditSaleData.item_service || !creditSaleData.original_amount || !creditSaleData.date || !creditSaleData.status || !creditSaleData.currency) {
-           toast({ title: "Missing fields", description: "Please fill all required credit sale fields, including currency.", variant: "destructive" });
+        if (!creditSaleData.customer_name || !creditSaleData.item_service || !creditSaleData.original_amount || !creditSaleData.date || !creditSaleData.status || !creditSaleData.currency || !creditSaleData.revenue_category) {
+           toast({ title: "Missing fields", description: "Please fill all required credit sale fields, including customer, item, amount, date, status, currency, and revenue category.", variant: "destructive" });
            setIsSubmitting(false); return;
         }
         const saleToSave: Omit<TransactionCreditSale, 'id' | 'created_at' | 'updated_at'> = {
@@ -260,12 +279,13 @@ export default function TransactionsPage() {
             item_service: creditSaleData.item_service!,
             details: creditSaleData.details,
             original_amount: creditSaleData.original_amount!,
-            paid_amount: 0, // New credit sales start with 0 paid
-            balance_due: creditSaleData.original_amount!, // Balance due is full amount initially
+            paid_amount: 0, 
+            balance_due: creditSaleData.original_amount!, 
             currency: creditSaleData.currency!,
             date: creditSaleData.date!.toISOString(),
             due_date: creditSaleData.due_date ? creditSaleData.due_date.toISOString() : undefined,
             status: creditSaleData.status! as CreditStatus,
+            revenue_category: creditSaleData.revenue_category,
         };
         const { error: insertError } = await supabase.from('credit_sales').insert([{ ...saleToSave, id: `cred_${Date.now()}` }]);
         error = insertError;
@@ -321,6 +341,15 @@ export default function TransactionsPage() {
                 <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={cashSaleData.date} onSelect={(d) => handleDateChange('cash', 'date', d)} initialFocus /></PopoverContent>
               </Popover>
             </div>
+             <div className="grid gap-2">
+                <Label htmlFor="cash_revenue_category">Revenue Category</Label>
+                <Select value={cashSaleData.revenue_category || ''} onValueChange={(value) => handleSelectChange('cash', 'revenue_category', value)} disabled={isSubmitting}>
+                    <SelectTrigger id="cash_revenue_category"><SelectValue placeholder="Select revenue category" /></SelectTrigger>
+                    <SelectContent>
+                        {revenueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                    </SelectContent>
+                </Select>
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="cash_item_service">Item/Service Sold</Label>
               <Input id="cash_item_service" name="item_service" value={cashSaleData.item_service || ''} onChange={(e) => handleInputChange('cash', e)} required disabled={isSubmitting}/>
@@ -331,7 +360,7 @@ export default function TransactionsPage() {
             </div>
             <div className="grid grid-cols-3 gap-4">
                 <div className="grid gap-2">
-                    <Label htmlFor="cash_amount">Amount</Label>
+                    <Label htmlFor="cash_amount">Total Sale Amount</Label>
                     <Input id="cash_amount" name="amount" type="number" value={cashSaleData.amount || ''} onChange={(e) => handleInputChange('cash', e)} required disabled={isSubmitting} step="0.01"/>
                 </div>
                  <div className="grid gap-2">
@@ -367,7 +396,7 @@ export default function TransactionsPage() {
                         <PlusCircle className="h-5 w-5" />
                       </Button>
                    </div>
-                    <Select value={cashSaleData.customer_name || '_SELECT_CUST_SF_'} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value === '_SELECT_CUST_SF_' ? '' : value)} disabled={isSubmitting || isLoading}>
+                    <Select value={cashSaleData.customer_name || '_SELECT_CUST_SF_'} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value)} disabled={isSubmitting || isLoading}>
                         <SelectTrigger id="cash_customer_name_shortfall">
                             <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
                         </SelectTrigger>
@@ -410,7 +439,7 @@ export default function TransactionsPage() {
                         <PlusCircle className="h-5 w-5" />
                       </Button>
                   </div>
-                <Select value={cashSaleData.customer_name || '_SELECT_CUST_OPT_'} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value === '_SELECT_CUST_OPT_' ? '' : value)} disabled={isSubmitting || isLoading}>
+                <Select value={cashSaleData.customer_name || '_SELECT_CUST_OPT_'} onValueChange={(value) => handleSelectChange('cash', 'customer_name', value)} disabled={isSubmitting || isLoading}>
                     <SelectTrigger id="cash_customer_name_optional">
                         <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer (Optional)"} />
                     </SelectTrigger>
@@ -434,7 +463,7 @@ export default function TransactionsPage() {
 
             <Button type="submit" disabled={isSubmitting || isLoading} className="w-full">
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
-              {isShortfall ? "Record Balance as Credit" : "Record Cash Sale"}
+              {isShortfall ? "Record Partial Payment & Credit Balance" : "Record Cash Sale"}
             </Button>
           </form>
         );
@@ -456,7 +485,7 @@ export default function TransactionsPage() {
                     <PlusCircle className="h-5 w-5" />
                 </Button>
               </div>
-              <Select value={creditSaleData.customer_name || '_SELECT_CUST_CREDIT_'} onValueChange={(value) => handleSelectChange('credit', 'customer_name', value === '_SELECT_CUST_CREDIT_' ? '' : value)} disabled={isSubmitting || isLoading}>
+              <Select value={creditSaleData.customer_name || '_SELECT_CUST_CREDIT_'} onValueChange={(value) => handleSelectChange('credit', 'customer_name', value)} disabled={isSubmitting || isLoading}>
                 <SelectTrigger id="credit_customer_name">
                     <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
                 </SelectTrigger>
@@ -467,6 +496,15 @@ export default function TransactionsPage() {
                     {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="grid gap-2">
+                <Label htmlFor="credit_revenue_category">Revenue Category</Label>
+                <Select value={creditSaleData.revenue_category || ''} onValueChange={(value) => handleSelectChange('credit', 'revenue_category', value)} disabled={isSubmitting}>
+                    <SelectTrigger id="credit_revenue_category"><SelectValue placeholder="Select revenue category" /></SelectTrigger>
+                    <SelectContent>
+                         {revenueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                    </SelectContent>
+                </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="credit_item_service">Item/Service Sold</Label>
@@ -567,7 +605,7 @@ export default function TransactionsPage() {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="deposit_bank">Bank</Label>
-              <Select value={depositData.bank || '_SELECT_BANK_'} onValueChange={(value) => handleSelectChange('deposit', 'bank', value === '_SELECT_BANK_' ? '' : value)} disabled={isSubmitting || isLoading}>
+              <Select value={depositData.bank || '_SELECT_BANK_'} onValueChange={(value) => handleSelectChange('deposit', 'bank', value)} disabled={isSubmitting || isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder={isLoading ? "Loading banks..." : "Select bank"} />
                 </SelectTrigger>
@@ -598,7 +636,7 @@ export default function TransactionsPage() {
                     <PlusCircle className="h-5 w-5" />
                 </Button>
               </div>
-               <Select value={depositData.deposited_by || '_SELECT_CUST_DEP_'} onValueChange={(value) => handleSelectChange('deposit', 'deposited_by', value === '_SELECT_CUST_DEP_' ? '' : value)} disabled={isSubmitting || isLoading}>
+               <Select value={depositData.deposited_by || '_SELECT_CUST_DEP_'} onValueChange={(value) => handleSelectChange('deposit', 'deposited_by', value)} disabled={isSubmitting || isLoading}>
                 <SelectTrigger>
                   <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} />
                 </SelectTrigger>
@@ -664,3 +702,5 @@ export default function TransactionsPage() {
     </>
   );
 }
+
+    
