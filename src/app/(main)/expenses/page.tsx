@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -44,9 +43,11 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import type { Vendor } from '@/app/(main)/vendors/page';
 
 
-type ExpenseCategory = 'Staff Salaries' | 'Taxes' | 'Utilities' | 'Supplies' | 'Maintenance' | 'Marketing' | 'Other';
+export type ExpenseCategory = 'Staff Salaries' | 'Taxes' | 'Utilities' | 'Supplies' | 'Maintenance' | 'Marketing' | 'Cost of Goods Sold - Bar' | 'Cost of Goods Sold - Restaurant' | 'Operating Supplies' | 'Other';
+type Currency = 'USD' | 'SSP';
 
 export interface Expense {
   id: string;
@@ -54,42 +55,62 @@ export interface Expense {
   category: ExpenseCategory;
   description: string;
   amount: number;
+  currency: Currency; // Added
   paid_to?: string;
+  vendor_id?: string; // Added
+  is_cash_purchase?: boolean; // Added
+  related_credit_purchase_payment_id?: string; // Added
   created_at?: string;
   updated_at?: string;
 }
 
-interface FormExpense extends Omit<Expense, 'date'> {
+interface FormExpense extends Omit<Expense, 'date' | 'currency'> {
   date: Date;
+  currency: Currency;
 }
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [vendorsList, setVendorsList] = useState<Pick<Vendor, 'id' | 'name'>[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
-  const [currentExpense, setCurrentExpense] = useState<Partial<FormExpense>>({ date: new Date(), category: 'Other' });
+  const [currentExpense, setCurrentExpense] = useState<Partial<FormExpense>>({ date: new Date(), category: 'Other', currency: 'USD' });
   const [activeTab, setActiveTab] = useState<ExpenseCategory | 'All'>('All');
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const fetchExpenses = async () => {
+  const fetchExpensesAndVendors = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+        const { data: expensesData, error: expensesError } = await supabase
+        .from('expenses')
+        .select('*, vendors (name)') // Join with vendors to get name
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      toast({ title: "Error fetching expenses", description: error.message, variant: "destructive" });
-    } else {
-      setExpenses(data || []);
+        if (expensesError) throw expensesError;
+        
+        const formattedExpenses = expensesData?.map(exp => ({
+            ...exp,
+            // Supabase returns joined data as an object or array of objects.
+            // If 'vendors' is an object and has a 'name', use it. Otherwise, fallback.
+            paid_to: exp.vendor_id && exp.vendors ? (exp.vendors as unknown as Vendor).name : exp.paid_to,
+        })) || [];
+        setExpenses(formattedExpenses);
+        
+
+        const { data: vendorsData, error: vendorsError } = await supabase.from('vendors').select('id, name');
+        if (vendorsError) throw vendorsError;
+        setVendorsList(vendorsData || []);
+
+    } catch (error: any) {
+         toast({ title: "Error fetching data", description: error.message, variant: "destructive" });
     }
     setIsLoading(false);
   };
 
   useEffect(() => {
-    fetchExpenses();
+    fetchExpensesAndVendors();
   }, []);
 
 
@@ -108,26 +129,40 @@ export default function ExpensesPage() {
     setCurrentExpense(prev => ({ ...prev, category: value as ExpenseCategory }));
   };
 
+  const handleCurrencyChange = (value: string) => {
+    setCurrentExpense(prev => ({...prev, currency: value as Currency}));
+  };
+
+  const handleVendorChange = (vendorName: string) => {
+    const selectedVendor = vendorsList.find(v => v.name === vendorName);
+    setCurrentExpense(prev => ({ ...prev, vendor_id: selectedVendor?.id, paid_to: selectedVendor?.name }));
+  };
+
   const resetForm = () => {
     setEditingExpense(null);
-    setCurrentExpense({ date: new Date(), category: 'Other' });
+    setCurrentExpense({ date: new Date(), category: 'Other', currency: 'USD' });
     setIsModalOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentExpense.date || !currentExpense.category || !currentExpense.description || !currentExpense.amount) {
-      toast({ title: "Missing fields", description: "Please fill all required expense fields.", variant: "destructive" });
+    if (!currentExpense.date || !currentExpense.category || !currentExpense.description || !currentExpense.amount || !currentExpense.currency) {
+      toast({ title: "Missing fields", description: "Please fill Date, Category, Description, Amount and Currency.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
 
-    const expenseToSave = {
+    // Explicitly prepare only the fields that exist in the 'expenses' table schema
+    const expenseToSave: Partial<Expense> = {
       date: currentExpense.date!.toISOString(),
       category: currentExpense.category!,
       description: currentExpense.description!,
       amount: currentExpense.amount!,
-      paid_to: currentExpense.paid_to,
+      currency: currentExpense.currency!,
+      paid_to: currentExpense.paid_to, // This could be a direct name or derived from vendor_id
+      vendor_id: currentExpense.vendor_id || null, // Ensure null if empty
+      is_cash_purchase: currentExpense.is_cash_purchase || false, // Default to false
+      // related_credit_purchase_payment_id is typically set by system, not user form for general expenses
     };
     
     let error = null;
@@ -153,7 +188,7 @@ export default function ExpensesPage() {
     } else {
       toast({ title: `Expense ${editingExpense ? 'updated' : 'added'} successfully`, variant: "default" });
       resetForm();
-      fetchExpenses();
+      fetchExpensesAndVendors();
     }
     setIsSubmitting(false);
   };
@@ -163,18 +198,18 @@ export default function ExpensesPage() {
     setCurrentExpense({
         ...expense,
         date: expense.date ? parseISO(expense.date) : new Date(),
+        currency: expense.currency || 'USD', // Ensure currency is set
     });
     setIsModalOpen(true);
   };
 
   const openNewExpenseModal = () => {
-    setEditingExpense(null);
-    setCurrentExpense({ date: new Date(), category: 'Other' });
+    resetForm();
     setIsModalOpen(true);
   };
   
   const handleDeleteExpense = async (expenseId: string) => {
-    setIsSubmitting(true);
+    setIsSubmitting(true); // Use a different state if needed for delete operations
     const { error } = await supabase
       .from('expenses')
       .delete()
@@ -184,27 +219,29 @@ export default function ExpensesPage() {
       toast({ title: "Error deleting expense", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Expense deleted successfully", variant: "default" });
-      fetchExpenses();
+      fetchExpensesAndVendors();
     }
-    setIsSubmitting(false);
+    setIsSubmitting(false); // Reset the state
   };
 
   const filteredExpenses = activeTab === 'All' ? expenses : expenses.filter(exp => exp.category === activeTab);
+  const expenseCategoriesSelect: ExpenseCategory[] = ['Staff Salaries', 'Taxes', 'Utilities', 'Supplies', 'Maintenance', 'Marketing', 'Cost of Goods Sold - Bar', 'Cost of Goods Sold - Restaurant', 'Operating Supplies', 'Other'];
+
 
   return (
     <>
       <PageTitle title="Expense Tracking" subtitle="Record and display all business expenses." icon={Receipt}>
         <Button onClick={openNewExpenseModal} disabled={isLoading || isSubmitting}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Add New Expense
+          <PlusCircle className="mr-2 h-4 w-4" /> Add New General Expense
         </Button>
       </PageTitle>
 
       <Dialog open={isModalOpen} onOpenChange={(isOpen) => { if(!isSubmitting) setIsModalOpen(isOpen); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="font-headline">{editingExpense ? 'Edit Expense' : 'Add New Expense'}</DialogTitle>
+            <DialogTitle className="font-headline">{editingExpense ? 'Edit Expense' : 'Add New General Expense'}</DialogTitle>
             <DialogDescription className="font-body">
-              {editingExpense ? 'Update the details of this expense.' : 'Enter details for a new business expense.'}
+              {editingExpense ? 'Update the details of this expense.' : 'Enter details for a new business expense. For Cash Purchases, use the Transactions page.'}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4 py-4">
@@ -220,34 +257,65 @@ export default function ExpensesPage() {
                 <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={currentExpense.date} onSelect={handleDateChange} initialFocus /></PopoverContent>
               </Popover>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
+            <div className="grid grid-cols-3 gap-4">
+                <div className="grid gap-2 col-span-2">
                     <Label htmlFor="category" className="font-body">Category</Label>
                     <Select value={currentExpense.category} onValueChange={handleCategoryChange} disabled={isSubmitting}>
                         <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                         <SelectContent>
-                        <SelectItem value="Staff Salaries">Staff Salaries</SelectItem>
-                        <SelectItem value="Taxes">Taxes</SelectItem>
-                        <SelectItem value="Utilities">Utilities</SelectItem>
-                        <SelectItem value="Supplies">Supplies</SelectItem>
-                        <SelectItem value="Maintenance">Maintenance</SelectItem>
-                        <SelectItem value="Marketing">Marketing</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
+                            {expenseCategoriesSelect.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="amount" className="font-body">Amount (USD)</Label>
-                    <Input id="amount" name="amount" type="number" value={currentExpense.amount || ''} onChange={handleInputChange} required disabled={isSubmitting}/>
+                    <Label htmlFor="amount" className="font-body">Amount</Label>
+                    <Input id="amount" name="amount" type="number" value={currentExpense.amount || ''} onChange={handleInputChange} required disabled={isSubmitting} step="0.01"/>
                 </div>
+            </div>
+             <div className="grid gap-2">
+                <Label htmlFor="currency_expense_form" className="font-body">Currency</Label>
+                <Select value={currentExpense.currency || 'USD'} onValueChange={handleCurrencyChange} disabled={isSubmitting}>
+                    <SelectTrigger id="currency_expense_form"><SelectValue placeholder="Select currency" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="SSP">SSP</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="description" className="font-body">Description</Label>
               <Textarea id="description" name="description" value={currentExpense.description || ''} onChange={handleInputChange} required disabled={isSubmitting}/>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="paid_to" className="font-body">Paid To (Optional)</Label>
-              <Input id="paid_to" name="paid_to" value={currentExpense.paid_to || ''} onChange={handleInputChange} disabled={isSubmitting}/>
+                <Label htmlFor="vendor_id_expenses" className="font-body">Paid To / Vendor (Optional)</Label>
+                 <Select
+                    value={currentExpense.paid_to || vendorsList.find(v => v.id === currentExpense.vendor_id)?.name || ""}
+                    onValueChange={handleVendorChange}
+                    disabled={isSubmitting || isLoading}
+                  >
+                    <SelectTrigger id="vendor_id_expenses">
+                      <SelectValue placeholder={isLoading ? "Loading vendors..." : "Select vendor or type name"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {isLoading && <SelectItem value="" disabled>Loading...</SelectItem>}
+                      <SelectItem value="">None / Direct Name</SelectItem>
+                      {vendorsList.map(vendor => (
+                        <SelectItem key={vendor.id} value={vendor.name}>
+                          {vendor.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!vendorsList.find(v => v.name === currentExpense.paid_to) && !currentExpense.vendor_id && (
+                     <Input 
+                        name="paid_to" 
+                        value={currentExpense.paid_to || ''} 
+                        onChange={handleInputChange} 
+                        placeholder="Or type direct recipient name" 
+                        className="mt-2"
+                        disabled={isSubmitting}
+                    />
+                  )}
             </div>
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="outline" onClick={resetForm} disabled={isSubmitting}>Cancel</Button></DialogClose>
@@ -261,19 +329,17 @@ export default function ExpensesPage() {
       </Dialog>
 
       <Tabs defaultValue="All" onValueChange={(value) => setActiveTab(value as ExpenseCategory | 'All')} className="w-full">
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 flex-wrap h-auto">
           <TabsTrigger value="All" className="font-body">All Expenses</TabsTrigger>
-          <TabsTrigger value="Staff Salaries" className="font-body">Staff Salaries</TabsTrigger>
-          <TabsTrigger value="Taxes" className="font-body">Taxes</TabsTrigger>
-          <TabsTrigger value="Utilities" className="font-body">Utilities</TabsTrigger>
-          <TabsTrigger value="Supplies" className="font-body">Supplies</TabsTrigger>
-          <TabsTrigger value="Other" className="font-body">Other</TabsTrigger>
+          {expenseCategoriesSelect.map(cat => (
+            <TabsTrigger key={cat} value={cat} className="font-body">{cat}</TabsTrigger>
+          ))}
         </TabsList>
 
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline">{activeTab === 'All' ? 'All Expenses' : `${activeTab} Expenses`}</CardTitle>
-            <CardDescription className="font-body">A log of recorded expenses. All amounts are in USD.</CardDescription>
+            <CardDescription className="font-body">A log of recorded expenses.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -287,28 +353,32 @@ export default function ExpensesPage() {
                     <TableHead className="font-body">Date</TableHead>
                     <TableHead className="font-body">Category</TableHead>
                     <TableHead className="font-body">Description</TableHead>
-                    <TableHead className="font-body">Amount (USD)</TableHead>
-                    <TableHead className="font-body">Paid To</TableHead>
+                    <TableHead className="font-body">Amount</TableHead>
+                    <TableHead className="font-body">Currency</TableHead>
+                    <TableHead className="font-body">Paid To/Vendor</TableHead>
                     <TableHead className="text-right font-body">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredExpenses.length > 0 ? filteredExpenses.map((expense) => (
-                    <TableRow key={expense.id}>
+                    <TableRow key={expense.id} className={expense.is_cash_purchase ? 'bg-blue-50 dark:bg-blue-900/30' : ''}>
                       <TableCell className="font-sans">{format(parseISO(expense.date), "PP")}</TableCell>
                       <TableCell className="font-body">{expense.category}</TableCell>
                       <TableCell className="font-body">{expense.description}</TableCell>
                       <TableCell className="font-semibold font-currency text-sm">
                         {expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </TableCell>
-                      <TableCell className="font-body">{expense.paid_to || 'N/A'}</TableCell>
+                      <TableCell className="font-currency text-sm">{expense.currency}</TableCell>
+                      <TableCell className="font-body">
+                        { (expense.vendor_id && vendorsList.find(v => v.id === expense.vendor_id)?.name) || expense.paid_to || 'N/A'}
+                      </TableCell>
                       <TableCell className="text-right space-x-1">
-                        <Button variant="ghost" size="icon" onClick={() => openEditModal(expense)} title="Edit Expense" disabled={isSubmitting}>
+                        <Button variant="ghost" size="icon" onClick={() => openEditModal(expense)} title="Edit Expense" disabled={isSubmitting || expense.is_cash_purchase || !!expense.related_credit_purchase_payment_id}>
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete Expense" disabled={isSubmitting}>
+                             <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" title="Delete Expense" disabled={isSubmitting || expense.is_cash_purchase || !!expense.related_credit_purchase_payment_id}>
                                <Trash2 className="h-4 w-4" />
                              </Button>
                           </AlertDialogTrigger>
@@ -332,7 +402,7 @@ export default function ExpensesPage() {
                     </TableRow>
                   )) : (
                      <TableRow>
-                        <TableCell colSpan={6} className="text-center font-body h-24">No expenses recorded for this category.</TableCell>
+                        <TableCell colSpan={7} className="text-center font-body h-24">No expenses recorded for this category.</TableCell>
                      </TableRow>
                   )}
                 </TableBody>
