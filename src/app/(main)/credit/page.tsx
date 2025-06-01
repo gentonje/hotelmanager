@@ -45,7 +45,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import type { Bank } from '@/app/(main)/banks/page';
-import type { RevenueCategory } from '@/app/(main)/transactions/page'; // Import RevenueCategory
+import type { RevenueCategory } from '@/app/(main)/transactions/page'; 
 
 const revenueCategoriesList: RevenueCategory[] = ['Rooms', 'Main Bar', 'Restaurant', 'Conference Halls', 'Internet Services', 'Swimming Pool', 'Other'];
 
@@ -63,8 +63,8 @@ export interface CreditSale {
   paid_amount: number;
   balance_due: number;
   currency: Currency;
-  date: string; // Store as ISO string
-  due_date?: string; // Store as ISO string
+  date: string; 
+  due_date?: string; 
   status: CreditStatus;
   revenue_category?: RevenueCategory;
   created_at?: string;
@@ -283,7 +283,7 @@ export default function CreditPage() {
       toast({ title: "Invalid Payment Details", description: "Please enter a valid payment date and amount.", variant: "destructive" });
       return;
     }
-    if (paymentDetails.amountPaid > saleForPayment.balance_due + 0.001) { // Add small tolerance for float issues
+    if (paymentDetails.amountPaid > saleForPayment.balance_due + 0.001) { 
       toast({ title: "Overpayment", description: `Amount paid (${paymentDetails.amountPaid}) cannot exceed balance due (${saleForPayment.balance_due}).`, variant: "destructive" });
       return;
     }
@@ -293,7 +293,7 @@ export default function CreditPage() {
     try {
       const newPaidAmount = saleForPayment.paid_amount + paymentDetails.amountPaid;
       const newBalanceDue = saleForPayment.original_amount - newPaidAmount;
-      const newStatus = newBalanceDue <= 0.001 ? 'Paid' : saleForPayment.status; // Tolerance for float
+      const newStatus = newBalanceDue <= 0.001 ? 'Paid' : saleForPayment.status; 
 
       const { error: updateStatusError } = await supabase
         .from('credit_sales')
@@ -316,7 +316,7 @@ export default function CreditPage() {
           amount: paymentDetails.amountPaid,
           currency: saleForPayment.currency,
           customer_name: saleForPayment.customer_name,
-          revenue_category: saleForPayment.revenue_category || 'Other', // Use original or default
+          revenue_category: saleForPayment.revenue_category || 'Other', 
         };
         const { error: cashError } = await supabase.from('cash_sales').insert([cashSaleRecord]);
         if (cashError) throw cashError;
@@ -437,7 +437,7 @@ export default function CreditPage() {
                 <Label htmlFor="date" className="font-body">Transaction Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !currentSale.date && "text-muted-foreground")} disabled={isSubmitting}>
+                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !currentSale.date && "text-muted-foreground")} disabled={isSubmitting}>
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {currentSale.date ? format(currentSale.date, "PPP") : <span>Pick a date</span>}
                     </Button>
@@ -449,7 +449,7 @@ export default function CreditPage() {
                 <Label htmlFor="due_date" className="font-body">Due Date (Optional)</Label>
                  <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !currentSale.due_date && "text-muted-foreground")} disabled={isSubmitting}>
+                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !currentSale.due_date && "text-muted-foreground")} disabled={isSubmitting}>
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {currentSale.due_date ? format(currentSale.due_date, "PPP") : <span>Pick a date</span>}
                     </Button>
@@ -475,7 +475,7 @@ export default function CreditPage() {
             <DialogTitle className="font-headline">Record Payment</DialogTitle>
             {saleForPayment && (
               <DialogDescription className="font-body">
-                Recording payment for {saleForPayment.customer_name} (Balance: {saleForPayment.currency} {formatCurrencyValue(saleForPayment.balance_due)}).
+                Recording payment for {saleForPayment.customer_name} (Balance: <span className="font-currency">{saleForPayment.currency} {formatCurrencyValue(saleForPayment.balance_due)}</span>).
               </DialogDescription>
             )}
           </DialogHeader>
@@ -485,7 +485,7 @@ export default function CreditPage() {
                 <Label htmlFor="paymentDate" className="font-body">Payment Date</Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !paymentDetails.paymentDate && "text-muted-foreground")} disabled={isSubmittingPayment}>
+                    <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !paymentDetails.paymentDate && "text-muted-foreground")} disabled={isSubmittingPayment}>
                       <CalendarIcon className="mr-2 h-4 w-4" />
                       {paymentDetails.paymentDate ? format(paymentDetails.paymentDate, "PPP") : <span>Pick a date</span>}
                     </Button>
@@ -494,7 +494,7 @@ export default function CreditPage() {
                 </Popover>
               </div>
                <div className="grid gap-2">
-                <Label htmlFor="amountPaid" className="font-body">Amount Paid ({saleForPayment.currency})</Label>
+                <Label htmlFor="amountPaid" className="font-body">Amount Paid (<span className="font-currency">{saleForPayment.currency}</span>)</Label>
                 <Input 
                   id="amountPaid" 
                   name="amountPaid" 
@@ -584,13 +584,13 @@ export default function CreditPage() {
                     <TableCell className="font-semibold font-body">{sale.customer_name}</TableCell>
                     <TableCell className="font-body">{sale.item_service}</TableCell>
                     <TableCell className="font-body">{sale.revenue_category || 'N/A'}</TableCell>
-                    <TableCell className="font-body">{formatCurrencyValue(sale.original_amount)}</TableCell>
-                    <TableCell className="font-body">{formatCurrencyValue(sale.paid_amount)}</TableCell>
-                    <TableCell className="font-body font-semibold">{formatCurrencyValue(sale.balance_due)}</TableCell>
-                    <TableCell className="font-body">{sale.currency}</TableCell>
-                    <TableCell className="font-body">{format(parseISO(sale.date), "PP")}</TableCell>
-                    <TableCell className="font-body">{sale.due_date ? format(parseISO(sale.due_date), "PP") : 'N/A'}</TableCell>
-                    <TableCell><Badge variant={getStatusBadgeVariant(sale.status)} className="font-body">{sale.status}</Badge></TableCell>
+                    <TableCell className="font-currency">{formatCurrencyValue(sale.original_amount)}</TableCell>
+                    <TableCell className="font-currency">{formatCurrencyValue(sale.paid_amount)}</TableCell>
+                    <TableCell className="font-semibold font-currency">{formatCurrencyValue(sale.balance_due)}</TableCell>
+                    <TableCell className="font-currency">{sale.currency}</TableCell>
+                    <TableCell className="font-sans">{format(parseISO(sale.date), "PP")}</TableCell>
+                    <TableCell className="font-sans">{sale.due_date ? format(parseISO(sale.due_date), "PP") : 'N/A'}</TableCell>
+                    <TableCell><Badge variant={getStatusBadgeVariant(sale.status)} className="font-sans">{sale.status}</Badge></TableCell>
                     <TableCell className="text-right space-x-1">
                       {sale.status !== 'Paid' && (
                         <Button variant="ghost" size="icon" onClick={() => openPaymentDialog(sale)} title="Record Payment" disabled={isSubmitting || isSubmittingPayment}>
@@ -637,5 +637,3 @@ export default function CreditPage() {
     </>
   );
 }
-
-    

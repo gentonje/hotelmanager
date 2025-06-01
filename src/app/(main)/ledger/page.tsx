@@ -9,10 +9,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { Label } from "@/components/ui/label"; // Added import
+import { Label } from "@/components/ui/label"; 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Loader2, BookText, CalendarIcon, Filter, XCircle } from "lucide-react";
-import { format, parseISO, startOfDay, endOfDay } from "date-fns";
+import { format, parseISO, startOfDay, endOfDay, startOfYear } from "date-fns";
 import { cn } from "@/lib/utils";
 
 // Interfaces from other modules (ensure paths are correct if they are moved/changed)
@@ -20,6 +20,8 @@ import type { CashSale } from '@/app/(main)/transactions/page';
 import type { CreditSale } from '@/app/(main)/credit/page';
 import type { Deposit } from '@/app/(main)/deposits/page';
 import type { Expense } from '@/app/(main)/expenses/page';
+import type { OpeningBalanceEntry as OpeningBalanceSourceEntry } from '@/app/(main)/opening-balances/page';
+
 
 type LedgerEntryType =
   | "Cash Sale"
@@ -27,11 +29,16 @@ type LedgerEntryType =
   | "Deposit"
   | "Expense"
   | "Credit Payment (Cash)"
-  | "Credit Payment (Deposit)";
+  | "Credit Payment (Deposit)"
+  | "Opening Balance - Cash"
+  | "Opening Balance - Bank"
+  | "Opening Balance - Receivable"
+  | "Opening Balance - Payable"
+  | "Opening Balance - Other Payable";
 
 interface LedgerEntry {
   id: string;
-  date: string; // ISO string
+  date: string; // ISO string or YYYY-MM-DD for opening balances
   description: string;
   type: LedgerEntryType;
   amount: number;
@@ -40,7 +47,7 @@ interface LedgerEntry {
   source_table: string;
 }
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE = 25; // Increased items per page
 
 export default function LedgerPage() {
   const [allLedgerEntries, setAllLedgerEntries] = useState<LedgerEntry[]>([]);
@@ -56,12 +63,52 @@ export default function LedgerPage() {
 
   const fetchLedgerData = useCallback(async (filterStartDate?: Date, filterEndDate?: Date) => {
     setIsLoading(true);
-    setCurrentPage(1); // Reset to first page on new data fetch/filter
+    setCurrentPage(1); 
     const collectedEntries: LedgerEntry[] = [];
 
     try {
       const queryStartDate = filterStartDate ? startOfDay(filterStartDate).toISOString() : undefined;
       const queryEndDate = filterEndDate ? endOfDay(filterEndDate).toISOString() : undefined;
+
+      // Fetch Opening Balances for the start of the current year
+      // These are added regardless of the date filter for now, as they form the baseline.
+      // A more advanced filter might exclude them if the filter range is completely outside the OB date.
+      const accountingStartDateForOpeningBalances = startOfYear(new Date()).toISOString().split('T')[0];
+      const { data: openingBalances, error: openingBalancesError } = await supabase
+        .from('opening_balances')
+        .select('*')
+        .eq('balance_date', accountingStartDateForOpeningBalances);
+
+      if (openingBalancesError) {
+        toast({ title: "Warning", description: `Could not fetch opening balances: ${openingBalancesError.message}`, variant: "destructive" });
+      } else if (openingBalances) {
+        openingBalances.forEach((ob: OpeningBalanceSourceEntry) => {
+          let ledgerEntryType: LedgerEntryType;
+          let description = `Opening Balance: ${ob.account_name}`;
+          if (ob.description) description += ` - ${ob.description}`;
+
+          switch (ob.account_type) {
+            case 'CASH_ON_HAND': ledgerEntryType = `Opening Balance - Cash`; break;
+            case 'BANK_ACCOUNT': ledgerEntryType = `Opening Balance - Bank`; break;
+            case 'CUSTOMER_DEBT': ledgerEntryType = `Opening Balance - Receivable`; break;
+            case 'VENDOR_CREDIT': ledgerEntryType = `Opening Balance - Payable`; break;
+            case 'OTHER_PAYABLE': ledgerEntryType = `Opening Balance - Other Payable`; break;
+            default: ledgerEntryType = `Opening Balance - Other Payable`; // Fallback
+          }
+
+          collectedEntries.push({
+            id: `ob_${ob.id || ob.account_name.replace(/\s+/g, '_') + '_' + ob.currency}`,
+            date: ob.balance_date, // YYYY-MM-DD string
+            description: description,
+            type: ledgerEntryType,
+            amount: ob.amount,
+            currency: ob.currency as string,
+            transaction_id: `ob_${ob.id || ob.account_name.replace(/\s+/g, '_')}`,
+            source_table: 'opening_balances',
+          });
+        });
+      }
+
 
       // 1. Fetch Cash Sales
       let cashQuery = supabase.from('cash_sales').select('*');
@@ -139,7 +186,7 @@ export default function LedgerPage() {
           description: expense.paid_to ? `${expense.description} (Paid to: ${expense.paid_to})` : expense.description,
           type: "Expense",
           amount: expense.amount,
-          currency: "USD", // Assuming USD for expenses as expenses table lacks currency
+          currency: "USD", 
           transaction_id: expense.id,
           source_table: 'expenses',
         });
@@ -187,6 +234,31 @@ export default function LedgerPage() {
     return `${currency} ${amount.toFixed(2)}`;
   };
 
+  const getEntryTypeColor = (type: LedgerEntryType) => {
+    if (type.includes("Expense") || type.includes("Payable")) return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+    if (type.includes("Sale") || type.includes("Deposit") || type.includes("Payment") || type.includes("Receivable") || type.includes("Cash") || type.includes("Bank")) return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+    if (type.includes("Credit Issued")) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+    return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+  };
+
+  const getAmountSignAndColor = (entry: LedgerEntry) => {
+    const isDebitNature = entry.type.includes("Expense") || entry.type.includes("Payable");
+    const isCreditNatureAssetDecrease = entry.type.includes("Credit Issued"); // This is a special case, it's an asset (receivable) but a contingent one.
+
+    let sign = '+';
+    let colorClass = 'text-green-600 dark:text-green-400';
+
+    if (isDebitNature) {
+      sign = '-';
+      colorClass = 'text-destructive';
+    } else if (isCreditNatureAssetDecrease) {
+      sign = ''; // No sign for credit issued, it's a contingent asset
+      colorClass = 'text-orange-600 dark:text-orange-400';
+    }
+    return { sign, colorClass };
+  };
+
+
   return (
     <>
       <PageTitle title="General Ledger" subtitle="A chronological record of all financial transactions." icon={BookText} />
@@ -203,7 +275,7 @@ export default function LedgerPage() {
                 <Button
                   id="start-date"
                   variant={"outline"}
-                  className={cn("w-full sm:w-[240px] justify-start text-left font-normal", !tempStartDate && "text-muted-foreground")}
+                  className={cn("w-full sm:w-[240px] justify-start text-left font-normal font-sans", !tempStartDate && "text-muted-foreground")}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {tempStartDate ? format(tempStartDate, "PPP") : <span>Pick a date</span>}
@@ -221,7 +293,7 @@ export default function LedgerPage() {
                 <Button
                   id="end-date"
                   variant={"outline"}
-                  className={cn("w-full sm:w-[240px] justify-start text-left font-normal", !tempEndDate && "text-muted-foreground")}
+                  className={cn("w-full sm:w-[240px] justify-start text-left font-normal font-sans", !tempEndDate && "text-muted-foreground")}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {tempEndDate ? format(tempEndDate, "PPP") : <span>Pick a date</span>}
@@ -253,7 +325,7 @@ export default function LedgerPage() {
               ? `Displaying transactions from ${format(startDate, "PP")}.`
               : endDate
               ? `Displaying transactions up to ${format(endDate, "PP")}.`
-              : "Browse through all recorded financial activities."}
+              : "Browse through all recorded financial activities, including start-of-year opening balances."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -274,31 +346,23 @@ export default function LedgerPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedEntries.length > 0 ? paginatedEntries.map((entry) => (
+                  {paginatedEntries.length > 0 ? paginatedEntries.map((entry) => {
+                    const { sign, colorClass } = getAmountSignAndColor(entry);
+                    return (
                     <TableRow key={entry.id}>
-                      <TableCell className="font-body">{format(parseISO(entry.date), "PP")}</TableCell>
+                      <TableCell className="font-sans">{format(parseISO(entry.date), "PP")}</TableCell>
                       <TableCell className="font-body">{entry.description}</TableCell>
                       <TableCell className="font-body">
-                        <span className={cn("px-2 py-1 text-xs rounded-full", {
-                          'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200': entry.type.includes("Sale") || entry.type.includes("Deposit") || entry.type.includes("Credit Payment"),
-                          'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200': entry.type.includes("Expense"),
-                          'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200': entry.type.includes("Credit Issued"),
-                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200': !(entry.type.includes("Sale") || entry.type.includes("Deposit") || entry.type.includes("Credit Payment") || entry.type.includes("Expense") || entry.type.includes("Credit Issued"))
-                        })}>
+                        <span className={cn("px-2 py-1 text-xs rounded-full font-sans", getEntryTypeColor(entry.type))}>
                           {entry.type}
                         </span>
                       </TableCell>
-                      <TableCell className={cn("font-semibold font-body text-right", {
-                        'text-destructive': entry.type.includes("Expense"),
-                        'text-orange-600 dark:text-orange-400': entry.type.includes("Credit Issued"),
-                        'text-green-600 dark:text-green-400': !entry.type.includes("Expense") && !entry.type.includes("Credit Issued"),
-                      })}>
-                        {entry.type.includes("Expense") ? '-' :
-                         entry.type.includes("Credit Issued") ? '' : '+' }
+                      <TableCell className={cn("font-semibold text-right font-currency", colorClass)}>
+                        {sign}
                         {formatCurrencyDisplay(entry.amount, entry.currency)}
                       </TableCell>
                     </TableRow>
-                  )) : (
+                  )}) : (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center font-body h-24">
                         No transactions found for the selected criteria.

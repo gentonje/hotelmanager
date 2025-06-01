@@ -57,6 +57,10 @@ interface DashboardStats {
   revenueByCategory: RevenueCategoryStats;
   netCashMovementUSD: number;
   netCashMovementSSP: number;
+  openingCashUSD: number;
+  openingCashSSP: number;
+  cashAtHandUSD: number;
+  cashAtHandSSP: number;
 }
 
 const initialRevenueBreakdown: RevenueBreakdown = { usd: 0, ssp: 0 };
@@ -84,6 +88,10 @@ const initialStats: DashboardStats = {
   },
   netCashMovementUSD: 0,
   netCashMovementSSP: 0,
+  openingCashUSD: 0,
+  openingCashSSP: 0,
+  cashAtHandUSD: 0,
+  cashAtHandSSP: 0,
 };
 
 const categoryMap: Record<RevenueCategory, keyof RevenueCategoryStats> = {
@@ -153,6 +161,22 @@ export default function DashboardPage() {
         otherRevenue: { usd: 0, ssp: 0 },
       };
 
+      // Fetch Opening Cash Balances (for start of current year)
+      const yearStartDateForOpeningBalance = startOfYear(new Date()).toISOString().split('T')[0];
+      const { data: openingBalancesData, error: openingBalancesError } = await supabase
+        .from('opening_balances')
+        .select('amount, currency')
+        .eq('balance_date', yearStartDateForOpeningBalance)
+        .eq('account_type', 'CASH_ON_HAND');
+
+      if (openingBalancesError) {
+        console.error("Error fetching opening cash balances:", openingBalancesError.message);
+        // Continue, default opening to 0
+      }
+      const fetchedOpeningCashUSD = openingBalancesData?.find(b => b.currency === 'USD')?.amount || 0;
+      const fetchedOpeningCashSSP = openingBalancesData?.find(b => b.currency === 'SSP')?.amount || 0;
+
+
       const { data: cashSalesData, error: cashSalesError } = await supabase
         .from('cash_sales')
         .select('amount, currency, revenue_category')
@@ -194,14 +218,14 @@ export default function DashboardPage() {
         const mappedCategoryKey = sale.revenue_category ? categoryMap[sale.revenue_category as RevenueCategory] : 'otherRevenue';
         if (sale.currency === 'USD') {
           totalCreditSalesOriginatedUSD += sale.original_amount;
-           if (revenueByCategoryUpdate[mappedCategoryKey]) { // Also add to breakdown if category exists
+           if (revenueByCategoryUpdate[mappedCategoryKey]) { 
             revenueByCategoryUpdate[mappedCategoryKey].usd += sale.original_amount;
           } else {
              revenueByCategoryUpdate.otherRevenue.usd += sale.original_amount;
           }
         } else if (sale.currency === 'SSP') {
           totalCreditSalesOriginatedSSP += sale.original_amount;
-          if (revenueByCategoryUpdate[mappedCategoryKey]) { // Also add to breakdown if category exists
+          if (revenueByCategoryUpdate[mappedCategoryKey]) { 
             revenueByCategoryUpdate[mappedCategoryKey].ssp += sale.original_amount;
           } else {
             revenueByCategoryUpdate.otherRevenue.ssp += sale.original_amount;
@@ -220,17 +244,17 @@ export default function DashboardPage() {
       
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('amount') // Assuming expenses table has 'amount' and lacks 'currency' for now
+        .select('amount') 
         .gte('date', startDateISO) 
         .lte('date', endDateISO);   
       if (expensesError) throw expensesError;
       const cashExpensesUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
-      const cashExpensesSSP = 0; // No SSP expenses tracked in 'expenses' table currently
+      const cashExpensesSSP = 0; 
 
       const { data: overallCreditData, error: overallCreditError } = await supabase
         .from('credit_sales')
         .select('balance_due, currency, customer_name')
-        .in('status', ['Pending', 'Overdue']); // Fetch all, regardless of date for overall outstanding
+        .in('status', ['Pending', 'Overdue']); 
       if (overallCreditError) throw overallCreditError;
       const outstandingCustomerCreditUSD = overallCreditData?.filter(c => c.currency === 'USD' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
       const outstandingCustomerCreditSSP = overallCreditData?.filter(c => c.currency === 'SSP' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
@@ -238,10 +262,11 @@ export default function DashboardPage() {
       const distinctDebtors = new Set(overallCreditData?.filter(c => c.balance_due > 0).map(c => c.customer_name));
       const activeDebtorsCount = distinctDebtors.size;
 
-      // Calculate Net Cash Movement for the period
       const netCashMovementUSD = cashSalesReceivedUSD - (cashExpensesUSD + cashDepositsUSD);
       const netCashMovementSSP = cashSalesReceivedSSP - (cashExpensesSSP + cashDepositsSSP);
 
+      const currentCashAtHandUSD = fetchedOpeningCashUSD + netCashMovementUSD;
+      const currentCashAtHandSSP = fetchedOpeningCashSSP + netCashMovementSSP;
 
       setStats({
         totalCreditSalesOriginatedUSD,
@@ -258,6 +283,10 @@ export default function DashboardPage() {
         revenueByCategory: revenueByCategoryUpdate,
         netCashMovementUSD,
         netCashMovementSSP,
+        openingCashUSD: fetchedOpeningCashUSD,
+        openingCashSSP: fetchedOpeningCashSSP,
+        cashAtHandUSD: currentCashAtHandUSD,
+        cashAtHandSSP: currentCashAtHandSSP,
       });
 
     } catch (error: any) {
@@ -280,7 +309,7 @@ export default function DashboardPage() {
     const intervalId = setInterval(() => fetchDashboardData(false), 60000); 
     return () => clearInterval(intervalId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPeriod]); // fetchDashboardData is memoized by useCallback
+  }, [selectedPeriod]); 
 
   
   const activeDebtorsMessage = stats.activeDebtorsCount > 0 
@@ -340,8 +369,8 @@ export default function DashboardPage() {
           title="Cash Sales Received"
           value={
             <>
-              <div>{formatCurrency(stats.cashSalesReceivedUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.cashSalesReceivedSSP, 'SSP')}</div>
+              <div className="font-currency">{formatCurrency(stats.cashSalesReceivedUSD, 'USD')}</div>
+              <div className="font-currency">{formatCurrency(stats.cashSalesReceivedSSP, 'SSP')}</div>
             </>
           }
           icon={DollarSign}
@@ -352,8 +381,8 @@ export default function DashboardPage() {
           title="Credit Sales Originated"
           value={
             <>
-              <div>{formatCurrency(stats.totalCreditSalesOriginatedUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.totalCreditSalesOriginatedSSP, 'SSP')}</div>
+              <div className="font-currency">{formatCurrency(stats.totalCreditSalesOriginatedUSD, 'USD')}</div>
+              <div className="font-currency">{formatCurrency(stats.totalCreditSalesOriginatedSSP, 'SSP')}</div>
             </>
           }
           icon={FileText} 
@@ -364,8 +393,8 @@ export default function DashboardPage() {
           title="Bank Deposits Value"
           value={
             <>
-              <div>{formatCurrency(stats.cashDepositsUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.cashDepositsSSP, 'SSP')}</div>
+              <div className="font-currency">{formatCurrency(stats.cashDepositsUSD, 'USD')}</div>
+              <div className="font-currency">{formatCurrency(stats.cashDepositsSSP, 'SSP')}</div>
             </>
           }
           icon={Landmark}
@@ -376,8 +405,8 @@ export default function DashboardPage() {
           title="Expenses Value"
           value={
             <>
-              <div>{formatCurrency(stats.cashExpensesUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.cashExpensesSSP, 'SSP')}</div> {/* Will be 0 until SSP expenses are tracked */}
+              <div className="font-currency">{formatCurrency(stats.cashExpensesUSD, 'USD')}</div>
+              <div className="font-currency">{formatCurrency(stats.cashExpensesSSP, 'SSP')}</div>
             </>
           }
           icon={TrendingDown}
@@ -388,8 +417,8 @@ export default function DashboardPage() {
           title="Outstanding Customer Credit"
           value={
             <>
-              <div>{formatCurrency(stats.outstandingCustomerCreditUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.outstandingCustomerCreditSSP, 'SSP')}</div>
+              <div className="font-currency">{formatCurrency(stats.outstandingCustomerCreditUSD, 'USD')}</div>
+              <div className="font-currency">{formatCurrency(stats.outstandingCustomerCreditSSP, 'SSP')}</div>
             </>
           }
           icon={Users}
@@ -397,20 +426,20 @@ export default function DashboardPage() {
            className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500"
         />
          <StatCard
-          title="Net Cash Movement (Period)"
+          title="Cash At Hand (Current)"
           value={
              <>
-              <div>{formatCurrency(stats.netCashMovementUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.netCashMovementSSP, 'SSP')}</div>
+              <div className="font-currency">{formatCurrency(stats.cashAtHandUSD, 'USD')}</div>
+              <div className="font-currency">{formatCurrency(stats.cashAtHandSSP, 'SSP')}</div>
             </>
           }
           icon={HandCoins}
-          description={`Net cash change for the period. True 'Cash At Hand' requires opening balance & more detailed cash transfer tracking.`}
+          description={`Est. based on start-of-year opening balance & selected period's net cash movement.`}
            className="bg-gradient-to-r from-sky-500/10 to-sky-600/10 border-sky-500"
         />
          <StatCard
           title="Cash Owed to Creditors"
-          value="N/A"
+          value={<span className="font-currency">N/A</span>}
           icon={Coins}
           description="Requires payables/bills tracking system for vendor credit."
            className="bg-gradient-to-r from-red-500/10 to-red-600/10 border-red-500"
@@ -432,8 +461,8 @@ export default function DashboardPage() {
                     {category.name}
                   </span>
                   <span className="text-sm font-semibold font-body text-right">
-                    <div>{formatCurrency(category.values.usd, 'USD')}</div>
-                    <div>{formatCurrency(category.values.ssp, 'SSP')}</div>
+                    <div className="font-currency">{formatCurrency(category.values.usd, 'USD')}</div>
+                    <div className="font-currency">{formatCurrency(category.values.ssp, 'SSP')}</div>
                   </span>
                 </div>
                 <Progress 

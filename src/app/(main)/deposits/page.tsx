@@ -44,7 +44,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-// Import interfaces from other pages for consistency
 import type { Bank } from '@/app/(main)/banks/page';
 import type { Customer } from '@/app/(main)/customers/page';
 
@@ -53,12 +52,12 @@ type Currency = 'USD' | 'SSP';
 
 export interface Deposit {
   id: string;
-  date: string; // Store as ISO string
+  date: string; 
   amount: number;
   currency: Currency;
-  bank: string; // Stores bank name
+  bank: string; 
   reference_no: string;
-  deposited_by: string; // Stores customer name
+  deposited_by: string; 
   description?: string;
   created_at?: string;
   updated_at?: string;
@@ -254,7 +253,7 @@ export default function DepositsPage() {
                   <Button
                     variant={"outline"}
                     className={cn(
-                      "w-full justify-start text-left font-normal",
+                      "w-full justify-start text-left font-normal font-sans",
                       !currentDeposit.date && "text-muted-foreground"
                     )}
                     disabled={isSubmitting}
@@ -358,9 +357,9 @@ export default function DepositsPage() {
               <TableBody>
                 {deposits.length > 0 ? deposits.map((deposit) => (
                   <TableRow key={deposit.id}>
-                    <TableCell className="font-body">{format(parseISO(deposit.date), "PPP")}</TableCell>
-                    <TableCell className="font-semibold font-body">{deposit.amount.toFixed(2)}</TableCell>
-                    <TableCell className="font-body">{deposit.currency}</TableCell>
+                    <TableCell className="font-sans">{format(parseISO(deposit.date), "PPP")}</TableCell>
+                    <TableCell className="font-semibold font-currency">{deposit.amount.toFixed(2)}</TableCell>
+                    <TableCell className="font-currency">{deposit.currency}</TableCell>
                     <TableCell className="font-body">{deposit.bank}</TableCell>
                     <TableCell className="font-body">{deposit.reference_no}</TableCell>
                     <TableCell className="font-body">{deposit.deposited_by}</TableCell>

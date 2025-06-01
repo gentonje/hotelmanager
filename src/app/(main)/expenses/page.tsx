@@ -50,7 +50,7 @@ type ExpenseCategory = 'Staff Salaries' | 'Taxes' | 'Utilities' | 'Supplies' | '
 
 export interface Expense {
   id: string;
-  date: string; // Store as ISO string
+  date: string; 
   category: ExpenseCategory;
   description: string;
   amount: number;
@@ -140,7 +140,7 @@ export default function ExpensesPage() {
     } else {
       const expenseWithId = {
         ...expenseToSave,
-        id: `exp_${Date.now()}` // Client-side ID generation
+        id: `exp_${Date.now()}` 
       };
       const { error: insertError } = await supabase
         .from('expenses')
@@ -212,7 +212,7 @@ export default function ExpensesPage() {
               <Label htmlFor="date" className="font-body">Date</Label>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !currentExpense.date && "text-muted-foreground")} disabled={isSubmitting}>
+                  <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !currentExpense.date && "text-muted-foreground")} disabled={isSubmitting}>
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {currentExpense.date ? format(currentExpense.date, "PPP") : <span>Pick a date</span>}
                   </Button>
@@ -237,7 +237,7 @@ export default function ExpensesPage() {
                     </Select>
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="amount" className="font-body">Amount</Label>
+                    <Label htmlFor="amount" className="font-body">Amount (USD)</Label>
                     <Input id="amount" name="amount" type="number" value={currentExpense.amount || ''} onChange={handleInputChange} required disabled={isSubmitting}/>
                 </div>
             </div>
@@ -273,7 +273,7 @@ export default function ExpensesPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline">{activeTab === 'All' ? 'All Expenses' : `${activeTab} Expenses`}</CardTitle>
-            <CardDescription className="font-body">A log of recorded expenses.</CardDescription>
+            <CardDescription className="font-body">A log of recorded expenses. All amounts are in USD.</CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -287,7 +287,7 @@ export default function ExpensesPage() {
                     <TableHead className="font-body">Date</TableHead>
                     <TableHead className="font-body">Category</TableHead>
                     <TableHead className="font-body">Description</TableHead>
-                    <TableHead className="font-body">Amount</TableHead>
+                    <TableHead className="font-body">Amount (USD)</TableHead>
                     <TableHead className="font-body">Paid To</TableHead>
                     <TableHead className="text-right font-body">Actions</TableHead>
                   </TableRow>
@@ -295,10 +295,10 @@ export default function ExpensesPage() {
                 <TableBody>
                   {filteredExpenses.length > 0 ? filteredExpenses.map((expense) => (
                     <TableRow key={expense.id}>
-                      <TableCell className="font-body">{format(parseISO(expense.date), "PP")}</TableCell>
+                      <TableCell className="font-sans">{format(parseISO(expense.date), "PP")}</TableCell>
                       <TableCell className="font-body">{expense.category}</TableCell>
                       <TableCell className="font-body">{expense.description}</TableCell>
-                      <TableCell className="font-semibold font-body">${expense.amount.toFixed(2)}</TableCell>
+                      <TableCell className="font-semibold font-currency">{expense.amount.toFixed(2)}</TableCell>
                       <TableCell className="font-body">{expense.paid_to || 'N/A'}</TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button variant="ghost" size="icon" onClick={() => openEditModal(expense)} title="Edit Expense" disabled={isSubmitting}>

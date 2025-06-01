@@ -13,6 +13,8 @@ export default {
         body: ['Alegreya', 'serif'],
         headline: ['Belleza', 'serif'],
         code: ['monospace'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        currency: ['Inter', 'sans-serif'],
       },
       colors: {
         background: 'hsl(var(--background))',
