@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DollarSign, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText, BedDouble, GlassWater, Utensils, Presentation, CalendarDays, Wifi, Waves, MoreHorizontal } from "lucide-react"; // Added Wifi, Waves, MoreHorizontal
+import { DollarSign, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText, BedDouble, GlassWater, Utensils, Presentation, CalendarDays, Wifi, Waves, MoreHorizontal } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -55,6 +55,8 @@ interface DashboardStats {
   cashSalesReceivedUSD: number;
   cashSalesReceivedSSP: number;
   revenueByCategory: RevenueCategoryStats;
+  netCashMovementUSD: number;
+  netCashMovementSSP: number;
 }
 
 const initialRevenueBreakdown: RevenueBreakdown = { usd: 0, ssp: 0 };
@@ -80,6 +82,8 @@ const initialStats: DashboardStats = {
     swimmingPool: { ...initialRevenueBreakdown },
     otherRevenue: { ...initialRevenueBreakdown },
   },
+  netCashMovementUSD: 0,
+  netCashMovementSSP: 0,
 };
 
 const categoryMap: Record<RevenueCategory, keyof RevenueCategoryStats> = {
@@ -190,14 +194,14 @@ export default function DashboardPage() {
         const mappedCategoryKey = sale.revenue_category ? categoryMap[sale.revenue_category as RevenueCategory] : 'otherRevenue';
         if (sale.currency === 'USD') {
           totalCreditSalesOriginatedUSD += sale.original_amount;
-           if (revenueByCategoryUpdate[mappedCategoryKey]) {
+           if (revenueByCategoryUpdate[mappedCategoryKey]) { // Also add to breakdown if category exists
             revenueByCategoryUpdate[mappedCategoryKey].usd += sale.original_amount;
           } else {
              revenueByCategoryUpdate.otherRevenue.usd += sale.original_amount;
           }
         } else if (sale.currency === 'SSP') {
           totalCreditSalesOriginatedSSP += sale.original_amount;
-          if (revenueByCategoryUpdate[mappedCategoryKey]) {
+          if (revenueByCategoryUpdate[mappedCategoryKey]) { // Also add to breakdown if category exists
             revenueByCategoryUpdate[mappedCategoryKey].ssp += sale.original_amount;
           } else {
             revenueByCategoryUpdate.otherRevenue.ssp += sale.original_amount;
@@ -216,23 +220,28 @@ export default function DashboardPage() {
       
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('amount') 
+        .select('amount') // Assuming expenses table has 'amount' and lacks 'currency' for now
         .gte('date', startDateISO) 
         .lte('date', endDateISO);   
       if (expensesError) throw expensesError;
       const cashExpensesUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
-      const cashExpensesSSP = 0; 
+      const cashExpensesSSP = 0; // No SSP expenses tracked in 'expenses' table currently
 
       const { data: overallCreditData, error: overallCreditError } = await supabase
         .from('credit_sales')
         .select('balance_due, currency, customer_name')
-        .in('status', ['Pending', 'Overdue']);
+        .in('status', ['Pending', 'Overdue']); // Fetch all, regardless of date for overall outstanding
       if (overallCreditError) throw overallCreditError;
       const outstandingCustomerCreditUSD = overallCreditData?.filter(c => c.currency === 'USD' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
       const outstandingCustomerCreditSSP = overallCreditData?.filter(c => c.currency === 'SSP' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
       
       const distinctDebtors = new Set(overallCreditData?.filter(c => c.balance_due > 0).map(c => c.customer_name));
       const activeDebtorsCount = distinctDebtors.size;
+
+      // Calculate Net Cash Movement for the period
+      const netCashMovementUSD = cashSalesReceivedUSD - (cashExpensesUSD + cashDepositsUSD);
+      const netCashMovementSSP = cashSalesReceivedSSP - (cashExpensesSSP + cashDepositsSSP);
+
 
       setStats({
         totalCreditSalesOriginatedUSD,
@@ -247,6 +256,8 @@ export default function DashboardPage() {
         outstandingCustomerCreditSSP,
         activeDebtorsCount,
         revenueByCategory: revenueByCategoryUpdate,
+        netCashMovementUSD,
+        netCashMovementSSP,
       });
 
     } catch (error: any) {
@@ -268,7 +279,8 @@ export default function DashboardPage() {
     fetchDashboardData(true); 
     const intervalId = setInterval(() => fetchDashboardData(false), 60000); 
     return () => clearInterval(intervalId);
-  }, [fetchDashboardData, selectedPeriod]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPeriod]); // fetchDashboardData is memoized by useCallback
 
   
   const activeDebtorsMessage = stats.activeDebtorsCount > 0 
@@ -276,7 +288,8 @@ export default function DashboardPage() {
     : 'No outstanding credit (Overall)';
 
   const totalCategorizedRevenueUSD = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.usd, 0);
-  const totalCategorizedRevenueOverall = totalCategorizedRevenueUSD;
+  const totalCategorizedRevenueSSP = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.ssp, 0);
+  const totalCategorizedRevenueOverall = totalCategorizedRevenueUSD + totalCategorizedRevenueSSP;
 
 
   if (isLoading && stats === initialStats) { 
@@ -364,11 +377,11 @@ export default function DashboardPage() {
           value={
             <>
               <div>{formatCurrency(stats.cashExpensesUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.cashExpensesSSP, 'SSP')}</div>
+              <div>{formatCurrency(stats.cashExpensesSSP, 'SSP')}</div> {/* Will be 0 until SSP expenses are tracked */}
             </>
           }
           icon={TrendingDown}
-          description={`Total expenses ${periodDescription} (SSP not tracked for expenses)`}
+          description={`Total expenses ${periodDescription} (SSP expenses not yet separately tracked)`}
            className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500"
         />
         <StatCard
@@ -384,10 +397,15 @@ export default function DashboardPage() {
            className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500"
         />
          <StatCard
-          title="Cash At Hand (Balance)"
-          value="N/A"
+          title="Net Cash Movement (Period)"
+          value={
+             <>
+              <div>{formatCurrency(stats.netCashMovementUSD, 'USD')}</div>
+              <div>{formatCurrency(stats.netCashMovementSSP, 'SSP')}</div>
+            </>
+          }
           icon={HandCoins}
-          description="Calculation requires opening balance & detailed cash transaction tracking."
+          description={`Net cash change for the period. True 'Cash At Hand' requires opening balance & more detailed cash transfer tracking.`}
            className="bg-gradient-to-r from-sky-500/10 to-sky-600/10 border-sky-500"
         />
          <StatCard
@@ -403,7 +421,7 @@ export default function DashboardPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="font-headline">Revenue Breakdown ({periodDescription.replace('for ', '')})</CardTitle>
-            <CardDescription className="font-body">Performance of revenue streams {periodDescription}.</CardDescription>
+            <CardDescription className="font-body">Performance of revenue streams {periodDescription}. Displays both USD and SSP.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {revenueCategoriesDisplay.filter(category => category.values.usd > 0 || category.values.ssp > 0).map(category => (
@@ -425,8 +443,8 @@ export default function DashboardPage() {
                 />
               </div>
             ))}
-             {totalCategorizedRevenueOverall === 0 && stats.revenueByCategory.otherRevenue.usd === 0 && stats.revenueByCategory.otherRevenue.ssp === 0 && ( // Check all categories
-                <p className="text-sm text-muted-foreground text-center py-4">No categorized revenue recorded for this period.</p>
+             {totalCategorizedRevenueOverall === 0 && ( 
+                <p className="text-sm text-muted-foreground text-center py-4 font-body">No categorized revenue recorded for this period.</p>
             )}
           </CardContent>
           <CardFooter>
@@ -452,3 +470,4 @@ export default function DashboardPage() {
     </>
   );
 }
+
