@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DollarSign, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText, BedDouble, GlassWater, Utensils, Presentation, CalendarDays, Wifi, Waves, MoreHorizontal } from "lucide-react";
+import { DollarSign, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText, BedDouble, GlassWater, Utensils, Presentation, CalendarDays, Wifi, Waves, MoreHorizontal, ShoppingCart } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -61,6 +61,9 @@ interface DashboardStats {
   openingCashSSP: number;
   cashAtHandUSD: number;
   cashAtHandSSP: number;
+  totalCreditPurchasesOwedUSD: number;
+  totalCreditPurchasesOwedSSP: number;
+  activeCreditorsCount: number;
 }
 
 const initialRevenueBreakdown: RevenueBreakdown = { usd: 0, ssp: 0 };
@@ -92,6 +95,9 @@ const initialStats: DashboardStats = {
   openingCashSSP: 0,
   cashAtHandUSD: 0,
   cashAtHandSSP: 0,
+  totalCreditPurchasesOwedUSD: 0,
+  totalCreditPurchasesOwedSSP: 0,
+  activeCreditorsCount: 0,
 };
 
 const categoryMap: Record<RevenueCategory, keyof RevenueCategoryStats> = {
@@ -120,21 +126,21 @@ export default function DashboardPage() {
     const now = new Date();
     switch (period) {
       case 'thisMonth':
-        return { 
-          startDate: startOfMonth(now), 
+        return {
+          startDate: startOfMonth(now),
           endDate: endOfMonth(now),
-          description: `for ${format(now, 'MMMM yyyy')}` 
+          description: `for ${format(now, 'MMMM yyyy')}`
         };
       case 'thisYear':
-        return { 
-          startDate: startOfYear(now), 
+        return {
+          startDate: startOfYear(now),
           endDate: endOfYear(now),
           description: `for ${format(now, 'yyyy')}`
         };
       case 'today':
       default:
-        return { 
-          startDate: startOfDay(now), 
+        return {
+          startDate: startOfDay(now),
           endDate: endOfDay(now),
           description: `for Today, ${format(now, 'PPP')}`
         };
@@ -142,7 +148,7 @@ export default function DashboardPage() {
   };
 
   const fetchDashboardData = useCallback(async (isInitialLoad: boolean = false) => {
-    if (isInitialLoad && isLoading) { 
+    if (isInitialLoad && isLoading) {
       // setIsLoading(true) is managed by useEffect initial load
     }
 
@@ -161,7 +167,6 @@ export default function DashboardPage() {
         otherRevenue: { usd: 0, ssp: 0 },
       };
 
-      // Fetch Opening Cash Balances (for start of current year)
       const yearStartDateForOpeningBalance = startOfYear(new Date()).toISOString().split('T')[0];
       const { data: openingBalancesData, error: openingBalancesError } = await supabase
         .from('opening_balances')
@@ -171,11 +176,9 @@ export default function DashboardPage() {
 
       if (openingBalancesError) {
         console.error("Error fetching opening cash balances:", openingBalancesError.message);
-        // Continue, default opening to 0
       }
       const fetchedOpeningCashUSD = openingBalancesData?.find(b => b.currency === 'USD')?.amount || 0;
       const fetchedOpeningCashSSP = openingBalancesData?.find(b => b.currency === 'SSP')?.amount || 0;
-
 
       const { data: cashSalesData, error: cashSalesError } = await supabase
         .from('cash_sales')
@@ -204,11 +207,11 @@ export default function DashboardPage() {
           }
         }
       });
-      
+
       const { data: creditSalesData, error: creditSalesError } = await supabase
         .from('credit_sales')
         .select('original_amount, currency, revenue_category')
-        .gte('date', startDateISO) 
+        .gte('date', startDateISO)
         .lte('date', endDateISO);
       if (creditSalesError) throw creditSalesError;
 
@@ -218,21 +221,21 @@ export default function DashboardPage() {
         const mappedCategoryKey = sale.revenue_category ? categoryMap[sale.revenue_category as RevenueCategory] : 'otherRevenue';
         if (sale.currency === 'USD') {
           totalCreditSalesOriginatedUSD += sale.original_amount;
-           if (revenueByCategoryUpdate[mappedCategoryKey]) { 
+           if (revenueByCategoryUpdate[mappedCategoryKey]) {
             revenueByCategoryUpdate[mappedCategoryKey].usd += sale.original_amount;
           } else {
              revenueByCategoryUpdate.otherRevenue.usd += sale.original_amount;
           }
         } else if (sale.currency === 'SSP') {
           totalCreditSalesOriginatedSSP += sale.original_amount;
-          if (revenueByCategoryUpdate[mappedCategoryKey]) { 
+          if (revenueByCategoryUpdate[mappedCategoryKey]) {
             revenueByCategoryUpdate[mappedCategoryKey].ssp += sale.original_amount;
           } else {
             revenueByCategoryUpdate.otherRevenue.ssp += sale.original_amount;
           }
         }
       });
-      
+
       const { data: depositsData, error: depositsError } = await supabase
         .from('deposits')
         .select('amount, currency')
@@ -241,26 +244,40 @@ export default function DashboardPage() {
       if (depositsError) throw depositsError;
       const cashDepositsUSD = depositsData?.filter(d => d.currency === 'USD').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
       const cashDepositsSSP = depositsData?.filter(d => d.currency === 'SSP').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
-      
+
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('amount') 
-        .gte('date', startDateISO) 
-        .lte('date', endDateISO);   
+        .select('amount, currency') // Ensure currency is selected
+        .gte('date', startDateISO)
+        .lte('date', endDateISO);
       if (expensesError) throw expensesError;
-      const cashExpensesUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
-      const cashExpensesSSP = 0; 
+      const cashExpensesUSD = expensesData?.filter(e => e.currency === 'USD').reduce((sum, expense) => sum + expense.amount, 0) || 0;
+      const cashExpensesSSP = expensesData?.filter(e => e.currency === 'SSP').reduce((sum, expense) => sum + expense.amount, 0) || 0;
+
 
       const { data: overallCreditData, error: overallCreditError } = await supabase
         .from('credit_sales')
         .select('balance_due, currency, customer_name')
-        .in('status', ['Pending', 'Overdue']); 
+        .in('status', ['Pending', 'Overdue']);
       if (overallCreditError) throw overallCreditError;
       const outstandingCustomerCreditUSD = overallCreditData?.filter(c => c.currency === 'USD' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
       const outstandingCustomerCreditSSP = overallCreditData?.filter(c => c.currency === 'SSP' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
-      
+
       const distinctDebtors = new Set(overallCreditData?.filter(c => c.balance_due > 0).map(c => c.customer_name));
       const activeDebtorsCount = distinctDebtors.size;
+
+      // Fetch overall credit purchases owed (Accounts Payable)
+      const { data: overallCreditPurchasesData, error: overallCreditPurchasesError } = await supabase
+        .from('credit_purchases')
+        .select('balance_due, currency, vendor_id, vendors (name)')
+        .in('status', ['Pending', 'Partially Paid', 'Overdue']);
+      if (overallCreditPurchasesError) throw overallCreditPurchasesError;
+
+      const totalCreditPurchasesOwedUSD = overallCreditPurchasesData?.filter(p => p.currency === 'USD' && p.balance_due > 0).reduce((sum, purchase) => sum + purchase.balance_due, 0) || 0;
+      const totalCreditPurchasesOwedSSP = overallCreditPurchasesData?.filter(p => p.currency === 'SSP' && p.balance_due > 0).reduce((sum, purchase) => sum + purchase.balance_due, 0) || 0;
+      const distinctCreditors = new Set(overallCreditPurchasesData?.filter(p => p.balance_due > 0).map(p => p.vendors?.name || p.vendor_id));
+      const activeCreditorsCount = distinctCreditors.size;
+
 
       const netCashMovementUSD = cashSalesReceivedUSD - (cashExpensesUSD + cashDepositsUSD);
       const netCashMovementSSP = cashSalesReceivedSSP - (cashExpensesSSP + cashDepositsSSP);
@@ -287,6 +304,9 @@ export default function DashboardPage() {
         openingCashSSP: fetchedOpeningCashSSP,
         cashAtHandUSD: currentCashAtHandUSD,
         cashAtHandSSP: currentCashAtHandSSP,
+        totalCreditPurchasesOwedUSD,
+        totalCreditPurchasesOwedSSP,
+        activeCreditorsCount
       });
 
     } catch (error: any) {
@@ -295,37 +315,41 @@ export default function DashboardPage() {
         description: error.message,
         variant: "destructive",
       });
-      if (isInitialLoad) setStats(initialStats); 
+      if (isInitialLoad) setStats(initialStats);
     } finally {
-      if (isLoading && isInitialLoad) { 
+      if (isLoading && isInitialLoad) {
         setIsLoading(false);
       }
     }
-  }, [toast, isLoading, selectedPeriod]); 
+  }, [toast, isLoading, selectedPeriod]);
 
   useEffect(() => {
-    setIsLoading(true); 
-    fetchDashboardData(true); 
-    const intervalId = setInterval(() => fetchDashboardData(false), 60000); 
+    setIsLoading(true);
+    fetchDashboardData(true);
+    const intervalId = setInterval(() => fetchDashboardData(false), 60000);
     return () => clearInterval(intervalId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPeriod]); 
+  }, [selectedPeriod]);
 
-  
-  const activeDebtorsMessage = stats.activeDebtorsCount > 0 
+
+  const activeDebtorsMessage = stats.activeDebtorsCount > 0
     ? `${stats.activeDebtorsCount} Active Debtor${stats.activeDebtorsCount > 1 ? 's' : ''} (Overall)`
-    : 'No outstanding credit (Overall)';
+    : 'No outstanding customer credit (Overall)';
+
+  const activeCreditorsMessage = stats.activeCreditorsCount > 0
+    ? `${stats.activeCreditorsCount} Active Creditor${stats.activeCreditorsCount > 1 ? 's' : ''} (Overall)`
+    : 'No outstanding vendor credit (Overall)';
 
   const totalCategorizedRevenueUSD = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.usd, 0);
   const totalCategorizedRevenueSSP = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.ssp, 0);
   const totalCategorizedRevenueOverall = totalCategorizedRevenueUSD + totalCategorizedRevenueSSP;
 
 
-  if (isLoading && stats === initialStats) { 
+  if (isLoading && stats === initialStats) {
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="ml-4 text-lg font-semibold">Loading Dashboard Data...</p>
+        <p className="ml-4 text-lg font-semibold font-body">Loading Dashboard Data...</p>
       </div>
     );
   }
@@ -344,9 +368,9 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageTitle 
-        title="Dashboard" 
-        subtitle={`Overview of hotel operations and revenue ${periodDescription}.`} 
+      <PageTitle
+        title="Dashboard"
+        subtitle={`Overview of hotel operations and revenue ${periodDescription}.`}
         icon={Info}
       >
         <div className="flex items-center gap-2">
@@ -385,7 +409,7 @@ export default function DashboardPage() {
               <div className="font-currency">{formatCurrency(stats.totalCreditSalesOriginatedSSP, 'SSP')}</div>
             </>
           }
-          icon={FileText} 
+          icon={FileText}
           description={`Value of new credit issued ${periodDescription}`}
           className="bg-gradient-to-r from-green-500/10 to-green-600/10 border-green-500"
         />
@@ -410,7 +434,7 @@ export default function DashboardPage() {
             </>
           }
           icon={TrendingDown}
-          description={`Total expenses ${periodDescription} (SSP expenses not yet separately tracked)`}
+          description={`Total expenses ${periodDescription}`}
            className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500"
         />
         <StatCard
@@ -422,7 +446,7 @@ export default function DashboardPage() {
             </>
           }
           icon={Users}
-          description={activeDebtorsMessage} 
+          description={activeDebtorsMessage}
            className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500"
         />
          <StatCard
@@ -438,10 +462,15 @@ export default function DashboardPage() {
            className="bg-gradient-to-r from-sky-500/10 to-sky-600/10 border-sky-500"
         />
          <StatCard
-          title="Cash Owed to Creditors"
-          value={<span className="font-currency text-sm">N/A</span>}
-          icon={Coins}
-          description="Requires payables/bills tracking system for vendor credit."
+          title="Cash Owed to Creditors (A/P)"
+          value={
+            <>
+              <div className="font-currency">{formatCurrency(stats.totalCreditPurchasesOwedUSD, 'USD')}</div>
+              <div className="font-currency">{formatCurrency(stats.totalCreditPurchasesOwedSSP, 'SSP')}</div>
+            </>
+          }
+          icon={ShoppingCart}
+          description={activeCreditorsMessage}
            className="bg-gradient-to-r from-red-500/10 to-red-600/10 border-red-500"
         />
       </div>
@@ -453,26 +482,26 @@ export default function DashboardPage() {
             <CardDescription className="font-body">Performance of revenue streams {periodDescription}. Displays both USD and SSP.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {revenueCategoriesDisplay.filter(category => category.values.usd > 0 || category.values.ssp > 0).map(category => (
+            {revenueCategoriesDisplay.map(category => (
               <div key={category.name}>
                 <div className="mb-1 flex justify-between items-center">
                   <span className="text-sm font-medium font-body flex items-center">
                     <category.icon className="w-4 h-4 mr-2 text-muted-foreground" />
                     {category.name}
                   </span>
-                  <span className="text-sm font-semibold font-body text-right">
+                  <span className="text-sm font-semibold text-right">
                     <div className="font-currency text-sm">{formatCurrency(category.values.usd, 'USD')}</div>
                     <div className="font-currency text-sm">{formatCurrency(category.values.ssp, 'SSP')}</div>
                   </span>
                 </div>
-                <Progress 
-                  value={totalCategorizedRevenueUSD > 0 ? (category.values.usd / totalCategorizedRevenueUSD) * 100 : 0} 
-                  aria-label={`${category.name} USD revenue progress`} 
+                <Progress
+                  value={totalCategorizedRevenueUSD > 0 ? (category.values.usd / totalCategorizedRevenueUSD) * 100 : 0}
+                  aria-label={`${category.name} USD revenue progress`}
                   className={category.colorClass}
                 />
               </div>
             ))}
-             {totalCategorizedRevenueOverall === 0 && ( 
+             {totalCategorizedRevenueOverall === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4 font-body">No categorized revenue recorded for this period.</p>
             )}
           </CardContent>
@@ -488,7 +517,7 @@ export default function DashboardPage() {
             <CardTitle className="font-headline">Quick Actions (Placeholder)</CardTitle>
              <CardDescription className="font-body">Common tasks at your fingertips.</CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <Button variant="default" size="lg" disabled>Add New Reservation</Button>
             <Button variant="outline" size="lg" disabled>Record Expense</Button>
             <Button variant="outline" size="lg" disabled>Update Inventory</Button>
@@ -499,3 +528,5 @@ export default function DashboardPage() {
     </>
   );
 }
+
+    
