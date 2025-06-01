@@ -4,6 +4,9 @@
 import React from 'react';
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { LucideIcon, LucideProps } from "lucide-react";
+import type { ForwardRefExoticComponent, RefAttributes } from 'react';
+
 import {
   LayoutDashboard,
   Landmark,
@@ -19,8 +22,8 @@ import {
   ListChecks,
   BookText,
   ArchiveRestore,
-  ShoppingCart, 
-  DollarSign, 
+  ShoppingCart,
+  DollarSign,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -30,11 +33,35 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 
-const navItems = [
+
+interface NavSubItem {
+  href: string;
+  label: string;
+  icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
+}
+
+interface NavItemGroup {
+  label: string;
+  isGroup: true;
+  items: NavSubItem[];
+  // Group itself doesn't have a top-level 'icon', it's derived or a default can be set
+}
+
+interface NavItemSingle {
+  href: string;
+  label: string;
+  icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
+  isGroup?: false; // Explicitly not a group
+}
+
+type NavItemType = NavItemGroup | NavItemSingle;
+
+
+const navItems: NavItemType[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: ListChecks },
   { href: "/ledger", label: "Ledger", icon: BookText },
-  { href: "/opening-balances", label: "Opening Balances", icon: ArchiveRestore }, 
+  { href: "/opening-balances", label: "Opening Balances", icon: ArchiveRestore },
   {
     label: "Sales Management",
     isGroup: true,
@@ -74,57 +101,64 @@ export function SidebarNav() {
   return (
     <SidebarMenu>
       {navItems.map((item, index) => {
-        if (item.isGroup && item.items) {
+        if (item.isGroup) {
+          const groupItem = item as NavItemGroup;
           return (
             <React.Fragment key={`group-${index}`}>
               <SidebarMenuItem className="mt-2">
-                 <span className="px-2 py-1 text-xs font-semibold text-muted-foreground group-data-[collapsible=icon]:hidden">{item.label}</span>
-                 <span className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:h-2">
-                    <item.items[0].icon className="w-4 h-4 group-data-[collapsible=icon]:mx-auto group-data-[collapsible=icon]:my-1 opacity-50" />
+                 <span className="px-2 py-1 text-xs font-semibold text-muted-foreground group-data-[collapsible=icon]:hidden">{groupItem.label}</span>
+                 <span className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:my-1">
+                    {groupItem.items.length > 0 && (() => {
+                        const GroupDisplayIcon = groupItem.items[0].icon;
+                        return <GroupDisplayIcon className="w-4 h-4 opacity-75" />;
+                    })()}
                  </span>
               </SidebarMenuItem>
-              {item.items.map(subItem => (
-                <SidebarMenuItem key={subItem.href}>
-                  <Link href={subItem.href} passHref legacyBehavior>
-                    <SidebarMenuButton
-                      asChild
-                      isActive={pathname === subItem.href || (subItem.href !== "/dashboard" && pathname.startsWith(subItem.href))}
-                      onClick={handleLinkClick}
-                      tooltip={subItem.label}
-                    >
-                      <a>
-                        <subItem.icon />
-                        <span>{subItem.label}</span>
-                      </a>
-                    </SidebarMenuButton>
-                  </Link>
-                </SidebarMenuItem>
-              ))}
+              {groupItem.items.map(subItem => {
+                const SubItemIcon = subItem.icon;
+                return (
+                  <SidebarMenuItem key={subItem.href}>
+                    <Link href={subItem.href} passHref legacyBehavior>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={pathname === subItem.href || (subItem.href !== "/dashboard" && pathname.startsWith(subItem.href))}
+                        onClick={handleLinkClick}
+                        tooltip={subItem.label}
+                      >
+                        <a>
+                          <SubItemIcon />
+                          <span>{subItem.label}</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </Link>
+                  </SidebarMenuItem>
+                );
+              })}
             </React.Fragment>
           );
-        } else if (!item.isGroup) {
+        } else {
+          const singleItem = item as NavItemSingle;
+          const ItemIcon = singleItem.icon;
           return (
-            <SidebarMenuItem key={item.href}>
-              <Link href={item.href!} passHref legacyBehavior>
+            <SidebarMenuItem key={singleItem.href}>
+              <Link href={singleItem.href} passHref legacyBehavior>
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href!))}
+                  isActive={pathname === singleItem.href || (singleItem.href !== "/dashboard" && pathname.startsWith(singleItem.href))}
                   onClick={handleLinkClick}
-                  tooltip={item.label}
+                  tooltip={singleItem.label}
                 >
                   <a>
-                    <item.icon />
-                    <span>{item.label}</span>
+                    <ItemIcon />
+                    <span>{singleItem.label}</span>
                   </a>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
           );
         }
-        return null;
       })}
     </SidebarMenu>
   );
 }
-
     
