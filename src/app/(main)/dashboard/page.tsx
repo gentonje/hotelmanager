@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { StatCard } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText } from "lucide-react";
+import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText, BedDouble, GlassWater, Utensils, Presentation } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -18,6 +18,13 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { format } from 'date-fns';
+
+interface RevenueCategoryStats {
+  rooms: number;
+  mainBar: number;
+  restaurant: number;
+  conferenceHalls: number;
+}
 
 interface DashboardStats {
   totalCreditSalesOriginatedTodayUSD: number;
@@ -31,6 +38,7 @@ interface DashboardStats {
   activeDebtorsCount: number;
   cashSalesReceivedTodayUSD: number;
   cashSalesReceivedTodaySSP: number;
+  revenueByCategoryTodayUSD: RevenueCategoryStats;
 }
 
 const initialStats: DashboardStats = {
@@ -45,7 +53,37 @@ const initialStats: DashboardStats = {
   activeDebtorsCount: 0,
   cashSalesReceivedTodayUSD: 0,
   cashSalesReceivedTodaySSP: 0,
+  revenueByCategoryTodayUSD: {
+    rooms: 0,
+    mainBar: 0,
+    restaurant: 0,
+    conferenceHalls: 0,
+  },
 };
+
+// Define keywords for revenue categorization (case-insensitive)
+const revenueCategoryKeywords = {
+  rooms: /\b(room|stay|accommodation|suite|lodge|guest)\b/i,
+  mainBar: /\b(bar|drink|beverage|soda|juice|water|beer|wine|spirit)\b/i, // More specific to bar items
+  restaurant: /\b(food|meal|restaurant|dining|breakfast|lunch|dinner|dish|plate|cuisine)\b/i,
+  conferenceHalls: /\b(conference|hall|meeting|event space|seminar|workshop)\b/i,
+};
+
+const categorizeItem = (itemService: string): keyof RevenueCategoryStats | null => {
+  if (!itemService) return null;
+  for (const category in revenueCategoryKeywords) {
+    if (revenueCategoryKeywords[category as keyof RevenueCategoryStats].test(itemService)) {
+      // Special handling to avoid bar items being categorized as restaurant if also general
+      if (category === 'restaurant' && revenueCategoryKeywords.mainBar.test(itemService)) {
+        // If it matches bar terms more strongly, prioritize bar or let it be ambiguous if not clearly bar
+        // This simple keyword approach can be tricky. More robust would be predefined categories for items.
+      }
+      return category as keyof RevenueCategoryStats;
+    }
+  }
+  return null; // Or 'other' if you want to track uncategorized revenue
+};
+
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
@@ -65,25 +103,53 @@ export default function DashboardPage() {
       const startDate = format(today, "yyyy-MM-dd'T'00:00:00.000'Z'");
       const endDate = format(today, "yyyy-MM-dd'T'23:59:59.999'Z'");
 
-      // --- Today's Credit Sales Originated ---
-      const { data: salesData, error: salesError } = await supabase
-        .from('credit_sales')
-        .select('original_amount, currency')
-        .gte('date', startDate)
-        .lte('date', endDate);
-      if (salesError) throw salesError;
-      const totalCreditSalesOriginatedTodayUSD = salesData?.filter(s => s.currency === 'USD').reduce((sum, sale) => sum + sale.original_amount, 0) || 0;
-      const totalCreditSalesOriginatedTodaySSP = salesData?.filter(s => s.currency === 'SSP').reduce((sum, sale) => sum + sale.original_amount, 0) || 0;
+      const revenueByCategoryTodayUSD: RevenueCategoryStats = { rooms: 0, mainBar: 0, restaurant: 0, conferenceHalls: 0 };
 
-      // --- Today's Cash Sales Received ---
+      // --- Today's Cash Sales (for categories and total) ---
       const { data: cashSalesData, error: cashSalesError } = await supabase
         .from('cash_sales')
-        .select('amount, currency')
+        .select('amount, currency, item_service')
         .gte('date', startDate)
         .lte('date', endDate);
       if (cashSalesError) throw cashSalesError;
-      const cashSalesReceivedTodayUSD = cashSalesData?.filter(s => s.currency === 'USD').reduce((sum, sale) => sum + sale.amount, 0) || 0;
-      const cashSalesReceivedTodaySSP = cashSalesData?.filter(s => s.currency === 'SSP').reduce((sum, sale) => sum + sale.amount, 0) || 0;
+
+      let cashSalesReceivedTodayUSD = 0;
+      let cashSalesReceivedTodaySSP = 0;
+      cashSalesData?.forEach(sale => {
+        if (sale.currency === 'USD') {
+          cashSalesReceivedTodayUSD += sale.amount;
+          const category = categorizeItem(sale.item_service);
+          if (category) {
+            revenueByCategoryTodayUSD[category] += sale.amount;
+          }
+        } else if (sale.currency === 'SSP') {
+          cashSalesReceivedTodaySSP += sale.amount;
+          // SSP categorization can be added here if needed for revenue breakdown
+        }
+      });
+      
+      // --- Today's Credit Sales Originated (for categories and total) ---
+      const { data: creditSalesData, error: creditSalesError } = await supabase
+        .from('credit_sales')
+        .select('original_amount, currency, item_service')
+        .gte('date', startDate)
+        .lte('date', endDate);
+      if (creditSalesError) throw creditSalesError;
+
+      let totalCreditSalesOriginatedTodayUSD = 0;
+      let totalCreditSalesOriginatedTodaySSP = 0;
+      creditSalesData?.forEach(sale => {
+        if (sale.currency === 'USD') {
+          totalCreditSalesOriginatedTodayUSD += sale.original_amount;
+          const category = categorizeItem(sale.item_service);
+          if (category) {
+            revenueByCategoryTodayUSD[category] += sale.original_amount;
+          }
+        } else if (sale.currency === 'SSP') {
+          totalCreditSalesOriginatedTodaySSP += sale.original_amount;
+          // SSP categorization can be added here if needed for revenue breakdown
+        }
+      });
       
       // --- Today's Deposits ---
       const { data: depositsData, error: depositsError } = await supabase
@@ -98,12 +164,12 @@ export default function DashboardPage() {
       // --- Today's Expenses ---
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('amount') 
+        .select('amount') // Assuming expenses table has 'date' and 'amount'. No currency yet.
         .gte('date', startDate) 
         .lte('date', endDate);   
       if (expensesError) throw expensesError;
       const cashExpensesTodayUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
-      const cashExpensesTodaySSP = 0; 
+      const cashExpensesTodaySSP = 0; // No SSP expenses tracking yet
 
       // --- Outstanding Customer Credit ---
       const { data: creditData, error: creditError } = await supabase
@@ -129,6 +195,7 @@ export default function DashboardPage() {
         outstandingCustomerCreditUSD,
         outstandingCustomerCreditSSP,
         activeDebtorsCount,
+        revenueByCategoryTodayUSD,
       });
 
     } catch (error: any) {
@@ -156,6 +223,8 @@ export default function DashboardPage() {
     ? `${stats.activeDebtorsCount} Active Debtor${stats.activeDebtorsCount > 1 ? 's' : ''}`
     : 'No outstanding credit';
 
+  const totalCategorizedRevenueTodayUSD = Object.values(stats.revenueByCategoryTodayUSD).reduce((sum, val) => sum + val, 0);
+
 
   if (isLoading && stats === initialStats) { 
     return (
@@ -165,6 +234,14 @@ export default function DashboardPage() {
       </div>
     );
   }
+
+  const revenueCategoriesDisplay = [
+    { name: "Rooms", value: stats.revenueByCategoryTodayUSD.rooms, icon: BedDouble, colorClass: "[&>div]:bg-blue-500" },
+    { name: "Main Bar", value: stats.revenueByCategoryTodayUSD.mainBar, icon: GlassWater, colorClass: "[&>div]:bg-green-500" },
+    { name: "Restaurant", value: stats.revenueByCategoryTodayUSD.restaurant, icon: Utensils, colorClass: "[&>div]:bg-orange-500" },
+    { name: "Conference Halls", value: stats.revenueByCategoryTodayUSD.conferenceHalls, icon: Presentation, colorClass: "[&>div]:bg-purple-500" },
+  ];
+
 
   return (
     <>
@@ -252,42 +329,35 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline">Revenue Breakdown (Placeholder)</CardTitle>
-            <CardDescription className="font-body">Performance of different revenue streams today.</CardDescription>
+            <CardTitle className="font-headline">Revenue Breakdown (Today - USD)</CardTitle>
+            <CardDescription className="font-body">Performance of different revenue streams today (USD only for this breakdown).</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <div className="mb-1 flex justify-between items-center">
-                <span className="text-sm font-medium font-body">Rooms</span>
-                <span className="text-sm font-semibold font-body">$0.00</span>
+            {revenueCategoriesDisplay.map(category => (
+              <div key={category.name}>
+                <div className="mb-1 flex justify-between items-center">
+                  <span className="text-sm font-medium font-body flex items-center">
+                    <category.icon className="w-4 h-4 mr-2 text-muted-foreground" />
+                    {category.name}
+                  </span>
+                  <span className="text-sm font-semibold font-body">
+                    {formatCurrency(category.value, 'USD')}
+                  </span>
+                </div>
+                <Progress 
+                  value={totalCategorizedRevenueTodayUSD > 0 ? (category.value / totalCategorizedRevenueTodayUSD) * 100 : 0} 
+                  aria-label={`${category.name} revenue progress`} 
+                  className={category.colorClass}
+                />
               </div>
-              <Progress value={0} aria-label="Rooms revenue progress" />
-            </div>
-            <div>
-              <div className="mb-1 flex justify-between items-center">
-                <span className="text-sm font-medium font-body">Main Bar</span>
-                <span className="text-sm font-semibold font-body">$0.00</span>
-              </div>
-              <Progress value={0} aria-label="Main bar revenue progress" className="[&>div]:bg-accent" />
-            </div>
-            <div>
-              <div className="mb-1 flex justify-between items-center">
-                <span className="text-sm font-medium font-body">Restaurant</span>
-                <span className="text-sm font-semibold font-body">$0.00</span>
-              </div>
-              <Progress value={0} aria-label="Restaurant revenue progress" />
-            </div>
-             <div>
-              <div className="mb-1 flex justify-between items-center">
-                <span className="text-sm font-medium font-body">Conference Halls</span>
-                <span className="text-sm font-semibold font-body">$0.00</span>
-              </div>
-              <Progress value={0} aria-label="Conference halls revenue progress" className="[&>div]:bg-secondary-foreground" />
-            </div>
+            ))}
+             {totalCategorizedRevenueTodayUSD === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">No categorized revenue recorded in USD for today.</p>
+            )}
           </CardContent>
           <CardFooter>
              <p className="text-xs text-muted-foreground font-body flex items-center">
-                <Info className="w-3 h-3 mr-1.5" /> Dashboard data updates periodically.
+                <Info className="w-3 h-3 mr-1.5" /> Dashboard data updates periodically. Categorization is based on 'item_service' keywords.
              </p>
           </CardFooter>
         </Card>
@@ -309,3 +379,4 @@ export default function DashboardPage() {
   );
 }
 
+    
