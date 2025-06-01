@@ -298,7 +298,9 @@ export default function ExpensesPage() {
                       <TableCell className="font-sans">{format(parseISO(expense.date), "PP")}</TableCell>
                       <TableCell className="font-body">{expense.category}</TableCell>
                       <TableCell className="font-body">{expense.description}</TableCell>
-                      <TableCell className="font-semibold font-currency">{expense.amount.toFixed(2)}</TableCell>
+                      <TableCell className="font-semibold font-currency text-sm">
+                        {expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
                       <TableCell className="font-body">{expense.paid_to || 'N/A'}</TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button variant="ghost" size="icon" onClick={() => openEditModal(expense)} title="Edit Expense" disabled={isSubmitting}>

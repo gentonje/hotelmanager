@@ -113,7 +113,7 @@ export default function DashboardPage() {
   const { toast } = useToast();
 
   const formatCurrency = (amount: number, currency: 'USD' | 'SSP') => {
-    return `${currency} ${amount.toFixed(2)}`;
+    return `${currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const getPeriodDates = (period: PeriodOption): { startDate: Date, endDate: Date, description: string } => {
@@ -439,7 +439,7 @@ export default function DashboardPage() {
         />
          <StatCard
           title="Cash Owed to Creditors"
-          value={<span className="font-currency">N/A</span>}
+          value={<span className="font-currency text-sm">N/A</span>}
           icon={Coins}
           description="Requires payables/bills tracking system for vendor credit."
            className="bg-gradient-to-r from-red-500/10 to-red-600/10 border-red-500"
@@ -461,8 +461,8 @@ export default function DashboardPage() {
                     {category.name}
                   </span>
                   <span className="text-sm font-semibold font-body text-right">
-                    <div className="font-currency">{formatCurrency(category.values.usd, 'USD')}</div>
-                    <div className="font-currency">{formatCurrency(category.values.ssp, 'SSP')}</div>
+                    <div className="font-currency text-sm">{formatCurrency(category.values.usd, 'USD')}</div>
+                    <div className="font-currency text-sm">{formatCurrency(category.values.ssp, 'SSP')}</div>
                   </span>
                 </div>
                 <Progress 
@@ -499,4 +499,3 @@ export default function DashboardPage() {
     </>
   );
 }
-

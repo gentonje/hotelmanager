@@ -231,7 +231,7 @@ export default function LedgerPage() {
   }, [allLedgerEntries, currentPage]);
 
   const formatCurrencyDisplay = (amount: number, currency: string) => {
-    return `${currency} ${amount.toFixed(2)}`;
+    return `${currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const getEntryTypeColor = (type: LedgerEntryType) => {
@@ -357,7 +357,7 @@ export default function LedgerPage() {
                           {entry.type}
                         </span>
                       </TableCell>
-                      <TableCell className={cn("font-semibold text-right font-currency", colorClass)}>
+                      <TableCell className={cn("font-semibold text-right font-currency text-sm", colorClass)}>
                         {sign}
                         {formatCurrencyDisplay(entry.amount, entry.currency)}
                       </TableCell>

@@ -341,7 +341,7 @@ export default function CreditPage() {
         if (depositError) throw depositError;
       }
 
-      toast({ title: "Payment Recorded Successfully", description: `Payment of ${saleForPayment.currency} ${paymentDetails.amountPaid.toFixed(2)} for ${saleForPayment.customer_name} recorded.`, variant: "default" });
+      toast({ title: "Payment Recorded Successfully", description: `Payment of ${saleForPayment.currency} ${paymentDetails.amountPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} for ${saleForPayment.customer_name} recorded.`, variant: "default" });
       resetPaymentForm();
       fetchCreditSales();
 
@@ -364,7 +364,7 @@ export default function CreditPage() {
 
   const formatCurrencyValue = (value: number | undefined) => {
       if (value === undefined || value === null) return '0.00';
-      return value.toFixed(2);
+      return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   return (
@@ -475,7 +475,7 @@ export default function CreditPage() {
             <DialogTitle className="font-headline">Record Payment</DialogTitle>
             {saleForPayment && (
               <DialogDescription className="font-body">
-                Recording payment for {saleForPayment.customer_name} (Balance: <span className="font-currency">{saleForPayment.currency} {formatCurrencyValue(saleForPayment.balance_due)}</span>).
+                Recording payment for {saleForPayment.customer_name} (Balance: <span className="font-currency text-sm">{saleForPayment.currency} {formatCurrencyValue(saleForPayment.balance_due)}</span>).
               </DialogDescription>
             )}
           </DialogHeader>
@@ -494,7 +494,7 @@ export default function CreditPage() {
                 </Popover>
               </div>
                <div className="grid gap-2">
-                <Label htmlFor="amountPaid" className="font-body">Amount Paid (<span className="font-currency">{saleForPayment.currency}</span>)</Label>
+                <Label htmlFor="amountPaid" className="font-body">Amount Paid (<span className="font-currency text-sm">{saleForPayment.currency}</span>)</Label>
                 <Input 
                   id="amountPaid" 
                   name="amountPaid" 
@@ -584,10 +584,10 @@ export default function CreditPage() {
                     <TableCell className="font-semibold font-body">{sale.customer_name}</TableCell>
                     <TableCell className="font-body">{sale.item_service}</TableCell>
                     <TableCell className="font-body">{sale.revenue_category || 'N/A'}</TableCell>
-                    <TableCell className="font-currency">{formatCurrencyValue(sale.original_amount)}</TableCell>
-                    <TableCell className="font-currency">{formatCurrencyValue(sale.paid_amount)}</TableCell>
-                    <TableCell className="font-semibold font-currency">{formatCurrencyValue(sale.balance_due)}</TableCell>
-                    <TableCell className="font-currency">{sale.currency}</TableCell>
+                    <TableCell className="font-currency text-sm">{formatCurrencyValue(sale.original_amount)}</TableCell>
+                    <TableCell className="font-currency text-sm">{formatCurrencyValue(sale.paid_amount)}</TableCell>
+                    <TableCell className="font-semibold font-currency text-sm">{formatCurrencyValue(sale.balance_due)}</TableCell>
+                    <TableCell className="font-currency text-sm">{sale.currency}</TableCell>
                     <TableCell className="font-sans">{format(parseISO(sale.date), "PP")}</TableCell>
                     <TableCell className="font-sans">{sale.due_date ? format(parseISO(sale.due_date), "PP") : 'N/A'}</TableCell>
                     <TableCell><Badge variant={getStatusBadgeVariant(sale.status)} className="font-sans">{sale.status}</Badge></TableCell>

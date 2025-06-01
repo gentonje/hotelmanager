@@ -358,8 +358,10 @@ export default function DepositsPage() {
                 {deposits.length > 0 ? deposits.map((deposit) => (
                   <TableRow key={deposit.id}>
                     <TableCell className="font-sans">{format(parseISO(deposit.date), "PPP")}</TableCell>
-                    <TableCell className="font-semibold font-currency">{deposit.amount.toFixed(2)}</TableCell>
-                    <TableCell className="font-currency">{deposit.currency}</TableCell>
+                    <TableCell className="font-semibold font-currency text-sm">
+                      {deposit.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </TableCell>
+                    <TableCell className="font-currency text-sm">{deposit.currency}</TableCell>
                     <TableCell className="font-body">{deposit.bank}</TableCell>
                     <TableCell className="font-body">{deposit.reference_no}</TableCell>
                     <TableCell className="font-body">{deposit.deposited_by}</TableCell>
