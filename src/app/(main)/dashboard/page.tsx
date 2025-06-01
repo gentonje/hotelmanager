@@ -6,7 +6,8 @@ import { supabase } from '@/lib/supabaseClient';
 import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { StatCard } from "@/components/shared/stat-card";
-import { Button } from "@/components/ui/button";
+// Button import was removed by previous fix, re-adding if still needed, though not directly used in this diff, good practice to keep imports clean
+// import { Button } from "@/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -26,11 +27,16 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 
+interface RevenueBreakdown {
+  usd: number;
+  ssp: number;
+}
+
 interface RevenueCategoryStats {
-  rooms: number;
-  mainBar: number;
-  restaurant: number;
-  conferenceHalls: number;
+  rooms: RevenueBreakdown;
+  mainBar: RevenueBreakdown;
+  restaurant: RevenueBreakdown;
+  conferenceHalls: RevenueBreakdown;
 }
 
 interface DashboardStats {
@@ -45,8 +51,10 @@ interface DashboardStats {
   activeDebtorsCount: number;
   cashSalesReceivedUSD: number;
   cashSalesReceivedSSP: number;
-  revenueByCategoryUSD: RevenueCategoryStats;
+  revenueByCategory: RevenueCategoryStats;
 }
+
+const initialRevenueBreakdown: RevenueBreakdown = { usd: 0, ssp: 0 };
 
 const initialStats: DashboardStats = {
   totalCreditSalesOriginatedUSD: 0,
@@ -60,17 +68,17 @@ const initialStats: DashboardStats = {
   activeDebtorsCount: 0,
   cashSalesReceivedUSD: 0,
   cashSalesReceivedSSP: 0,
-  revenueByCategoryUSD: {
-    rooms: 0,
-    mainBar: 0,
-    restaurant: 0,
-    conferenceHalls: 0,
+  revenueByCategory: {
+    rooms: { ...initialRevenueBreakdown },
+    mainBar: { ...initialRevenueBreakdown },
+    restaurant: { ...initialRevenueBreakdown },
+    conferenceHalls: { ...initialRevenueBreakdown },
   },
 };
 
 const revenueCategoryKeywords = {
   rooms: /\b(room|stay|accommodation|suite|lodge|guest)\b/i,
-  mainBar: /\b(bar|drink|beverage|soda|juice|water|beer|wine|spirit)\b/i,
+  mainBar: /\b(bar|drink|beverage|soda|juice|water|beer|wine|spirit)\b/i, // Note: 'water' might overlap with rooms if water bottles are sold as room items
   restaurant: /\b(food|meal|restaurant|dining|breakfast|lunch|dinner|dish|plate|cuisine)\b/i,
   conferenceHalls: /\b(conference|hall|meeting|event space|seminar|workshop)\b/i,
 };
@@ -123,8 +131,8 @@ export default function DashboardPage() {
   };
 
   const fetchDashboardData = useCallback(async (isInitialLoad: boolean = false) => {
-    if (isInitialLoad) {
-      setIsLoading(true);
+    if (isInitialLoad && isLoading) { // Ensure setIsLoading(true) is only called for the very first load
+      // setIsLoading(true) is managed by useEffect initial load
     }
 
     const { startDate, endDate } = getPeriodDates(selectedPeriod);
@@ -132,7 +140,12 @@ export default function DashboardPage() {
     const endDateISO = endDate.toISOString();
 
     try {
-      const revenueByCategoryUSD: RevenueCategoryStats = { rooms: 0, mainBar: 0, restaurant: 0, conferenceHalls: 0 };
+      const revenueByCategoryUpdate: RevenueCategoryStats = {
+        rooms: { usd: 0, ssp: 0 },
+        mainBar: { usd: 0, ssp: 0 },
+        restaurant: { usd: 0, ssp: 0 },
+        conferenceHalls: { usd: 0, ssp: 0 },
+      };
 
       const { data: cashSalesData, error: cashSalesError } = await supabase
         .from('cash_sales')
@@ -144,32 +157,33 @@ export default function DashboardPage() {
       let cashSalesReceivedUSD = 0;
       let cashSalesReceivedSSP = 0;
       cashSalesData?.forEach(sale => {
+        const category = categorizeItem(sale.item_service);
         if (sale.currency === 'USD') {
           cashSalesReceivedUSD += sale.amount;
-          const category = categorizeItem(sale.item_service);
-          if (category) revenueByCategoryUSD[category] += sale.amount;
+          if (category) revenueByCategoryUpdate[category].usd += sale.amount;
         } else if (sale.currency === 'SSP') {
           cashSalesReceivedSSP += sale.amount;
+          if (category) revenueByCategoryUpdate[category].ssp += sale.amount;
         }
       });
       
       const { data: creditSalesData, error: creditSalesError } = await supabase
         .from('credit_sales')
         .select('original_amount, currency, item_service')
-        .gte('date', startDateISO) // Filter by origination date
+        .gte('date', startDateISO) 
         .lte('date', endDateISO);
       if (creditSalesError) throw creditSalesError;
 
       let totalCreditSalesOriginatedUSD = 0;
       let totalCreditSalesOriginatedSSP = 0;
       creditSalesData?.forEach(sale => {
+        const category = categorizeItem(sale.item_service);
         if (sale.currency === 'USD') {
           totalCreditSalesOriginatedUSD += sale.original_amount;
-           // Only categorize credit sales originated in the period for USD revenue breakdown
-          const category = categorizeItem(sale.item_service);
-          if (category) revenueByCategoryUSD[category] += sale.original_amount;
+          if (category) revenueByCategoryUpdate[category].usd += sale.original_amount;
         } else if (sale.currency === 'SSP') {
           totalCreditSalesOriginatedSSP += sale.original_amount;
+          if (category) revenueByCategoryUpdate[category].ssp += sale.original_amount;
         }
       });
       
@@ -191,7 +205,6 @@ export default function DashboardPage() {
       const cashExpensesUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
       const cashExpensesSSP = 0; 
 
-      // Outstanding credit and debtors count are cumulative, not period-specific for flows
       const { data: overallCreditData, error: overallCreditError } = await supabase
         .from('credit_sales')
         .select('balance_due, currency, customer_name')
@@ -215,7 +228,7 @@ export default function DashboardPage() {
         outstandingCustomerCreditUSD,
         outstandingCustomerCreditSSP,
         activeDebtorsCount,
-        revenueByCategoryUSD,
+        revenueByCategory: revenueByCategoryUpdate,
       });
 
     } catch (error: any) {
@@ -230,20 +243,24 @@ export default function DashboardPage() {
         setIsLoading(false);
       }
     }
-  }, [toast, isLoading, selectedPeriod]); // Added selectedPeriod
+  }, [toast, isLoading, selectedPeriod]); 
 
   useEffect(() => {
+    setIsLoading(true); // Set loading true for initial fetch or period change
     fetchDashboardData(true); 
     const intervalId = setInterval(() => fetchDashboardData(false), 60000); 
     return () => clearInterval(intervalId);
-  }, [fetchDashboardData, selectedPeriod]); // Added selectedPeriod
+  }, [fetchDashboardData, selectedPeriod]); 
 
   
   const activeDebtorsMessage = stats.activeDebtorsCount > 0 
     ? `${stats.activeDebtorsCount} Active Debtor${stats.activeDebtorsCount > 1 ? 's' : ''} (Overall)`
     : 'No outstanding credit (Overall)';
 
-  const totalCategorizedRevenueUSD = Object.values(stats.revenueByCategoryUSD).reduce((sum, val) => sum + val, 0);
+  const totalCategorizedRevenueUSD = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.usd, 0);
+  const totalCategorizedRevenueSSP = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.ssp, 0);
+  const totalCategorizedRevenueOverall = totalCategorizedRevenueUSD + totalCategorizedRevenueSSP;
+
 
   if (isLoading && stats === initialStats) { 
     return (
@@ -255,10 +272,10 @@ export default function DashboardPage() {
   }
 
   const revenueCategoriesDisplay = [
-    { name: "Rooms", value: stats.revenueByCategoryUSD.rooms, icon: BedDouble, colorClass: "[&>div]:bg-blue-500" },
-    { name: "Main Bar", value: stats.revenueByCategoryUSD.mainBar, icon: GlassWater, colorClass: "[&>div]:bg-green-500" },
-    { name: "Restaurant", value: stats.revenueByCategoryUSD.restaurant, icon: Utensils, colorClass: "[&>div]:bg-orange-500" },
-    { name: "Conference Halls", value: stats.revenueByCategoryUSD.conferenceHalls, icon: Presentation, colorClass: "[&>div]:bg-purple-500" },
+    { name: "Rooms", values: stats.revenueByCategory.rooms, icon: BedDouble, colorClass: "[&>div]:bg-blue-500" },
+    { name: "Main Bar", values: stats.revenueByCategory.mainBar, icon: GlassWater, colorClass: "[&>div]:bg-green-500" },
+    { name: "Restaurant", values: stats.revenueByCategory.restaurant, icon: Utensils, colorClass: "[&>div]:bg-orange-500" },
+    { name: "Conference Halls", values: stats.revenueByCategory.conferenceHalls, icon: Presentation, colorClass: "[&>div]:bg-purple-500" },
   ];
 
   const periodDescription = getPeriodDates(selectedPeriod).description;
@@ -327,7 +344,7 @@ export default function DashboardPage() {
           value={
             <>
               <div>{formatCurrency(stats.cashExpensesUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.cashExpensesSSP, 'SSP')}</div>
+              <div>{formatCurrency(stats.cashExpensesSSP, 'SSP')}</div> {/* SSP Expenses still 0 for now */}
             </>
           }
           icon={TrendingDown}
@@ -343,7 +360,7 @@ export default function DashboardPage() {
             </>
           }
           icon={Users}
-          description={activeDebtorsMessage} // This remains overall
+          description={activeDebtorsMessage} 
            className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500"
         />
          <StatCard
@@ -365,8 +382,8 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline">Revenue Breakdown (USD - {selectedPeriod.replace('this', 'This ')})</CardTitle>
-            <CardDescription className="font-body">Performance of revenue streams (USD) {periodDescription}.</CardDescription>
+            <CardTitle className="font-headline">Revenue Breakdown ({selectedPeriod.replace('this', 'This ')})</CardTitle>
+            <CardDescription className="font-body">Performance of revenue streams (USD & SSP) {periodDescription}.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {revenueCategoriesDisplay.map(category => (
@@ -376,19 +393,20 @@ export default function DashboardPage() {
                     <category.icon className="w-4 h-4 mr-2 text-muted-foreground" />
                     {category.name}
                   </span>
-                  <span className="text-sm font-semibold font-body">
-                    {formatCurrency(category.value, 'USD')}
+                  <span className="text-sm font-semibold font-body text-right">
+                    <div>{formatCurrency(category.values.usd, 'USD')}</div>
+                    <div>{formatCurrency(category.values.ssp, 'SSP')}</div>
                   </span>
                 </div>
                 <Progress 
-                  value={totalCategorizedRevenueUSD > 0 ? (category.value / totalCategorizedRevenueUSD) * 100 : 0} 
-                  aria-label={`${category.name} revenue progress`} 
+                  value={totalCategorizedRevenueUSD > 0 ? (category.values.usd / totalCategorizedRevenueUSD) * 100 : 0} 
+                  aria-label={`${category.name} USD revenue progress`} 
                   className={category.colorClass}
                 />
               </div>
             ))}
-             {totalCategorizedRevenueUSD === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">No categorized USD revenue recorded for this period.</p>
+             {totalCategorizedRevenueOverall === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">No categorized revenue recorded for this period.</p>
             )}
           </CardContent>
           <CardFooter>
@@ -404,13 +422,16 @@ export default function DashboardPage() {
              <CardDescription className="font-body">Common tasks at your fingertips.</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Button variant="default" size="lg" disabled>Add New Reservation</Button>
-            <Button variant="outline" size="lg" disabled>Record Expense</Button>
-            <Button variant="outline" size="lg" disabled>Update Inventory</Button>
-            <Button variant="secondary" size="lg" disabled>Generate Daily Summary</Button>
+            {/* These buttons are illustrative and currently disabled */}
+            <button className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-11 px-8" disabled>Add New Reservation</button>
+            <button className="border border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-11 px-8" disabled>Record Expense</button>
+            <button className="border border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-11 px-8" disabled>Update Inventory</button>
+            <button className="bg-secondary text-secondary-foreground hover:bg-secondary/80 inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 h-11 px-8" disabled>Generate Daily Summary</button>
           </CardContent>
         </Card>
       </div>
     </>
   );
 }
+
+    
