@@ -7,7 +7,14 @@ import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { StatCard } from "@/components/shared/stat-card";
 import { Button } from "@/components/ui/button";
-import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText, BedDouble, GlassWater, Utensils, Presentation } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { DollarSign, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText, BedDouble, GlassWater, Utensils, Presentation, CalendarDays } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -17,7 +24,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth, endOfMonth, startOfYear, endOfYear } from 'date-fns';
 
 interface RevenueCategoryStats {
   rooms: number;
@@ -27,33 +34,33 @@ interface RevenueCategoryStats {
 }
 
 interface DashboardStats {
-  totalCreditSalesOriginatedTodayUSD: number;
-  totalCreditSalesOriginatedTodaySSP: number;
-  cashDepositsTodayUSD: number;
-  cashDepositsTodaySSP: number;
-  cashExpensesTodayUSD: number;
-  cashExpensesTodaySSP: number;
+  totalCreditSalesOriginatedUSD: number;
+  totalCreditSalesOriginatedSSP: number;
+  cashDepositsUSD: number;
+  cashDepositsSSP: number;
+  cashExpensesUSD: number;
+  cashExpensesSSP: number;
   outstandingCustomerCreditUSD: number;
   outstandingCustomerCreditSSP: number;
   activeDebtorsCount: number;
-  cashSalesReceivedTodayUSD: number;
-  cashSalesReceivedTodaySSP: number;
-  revenueByCategoryTodayUSD: RevenueCategoryStats;
+  cashSalesReceivedUSD: number;
+  cashSalesReceivedSSP: number;
+  revenueByCategoryUSD: RevenueCategoryStats;
 }
 
 const initialStats: DashboardStats = {
-  totalCreditSalesOriginatedTodayUSD: 0,
-  totalCreditSalesOriginatedTodaySSP: 0,
-  cashDepositsTodayUSD: 0,
-  cashDepositsTodaySSP: 0,
-  cashExpensesTodayUSD: 0,
-  cashExpensesTodaySSP: 0,
+  totalCreditSalesOriginatedUSD: 0,
+  totalCreditSalesOriginatedSSP: 0,
+  cashDepositsUSD: 0,
+  cashDepositsSSP: 0,
+  cashExpensesUSD: 0,
+  cashExpensesSSP: 0,
   outstandingCustomerCreditUSD: 0,
   outstandingCustomerCreditSSP: 0,
   activeDebtorsCount: 0,
-  cashSalesReceivedTodayUSD: 0,
-  cashSalesReceivedTodaySSP: 0,
-  revenueByCategoryTodayUSD: {
+  cashSalesReceivedUSD: 0,
+  cashSalesReceivedSSP: 0,
+  revenueByCategoryUSD: {
     rooms: 0,
     mainBar: 0,
     restaurant: 0,
@@ -61,10 +68,9 @@ const initialStats: DashboardStats = {
   },
 };
 
-// Define keywords for revenue categorization (case-insensitive)
 const revenueCategoryKeywords = {
   rooms: /\b(room|stay|accommodation|suite|lodge|guest)\b/i,
-  mainBar: /\b(bar|drink|beverage|soda|juice|water|beer|wine|spirit)\b/i, // More specific to bar items
+  mainBar: /\b(bar|drink|beverage|soda|juice|water|beer|wine|spirit)\b/i,
   restaurant: /\b(food|meal|restaurant|dining|breakfast|lunch|dinner|dish|plate|cuisine)\b/i,
   conferenceHalls: /\b(conference|hall|meeting|event space|seminar|workshop)\b/i,
 };
@@ -73,129 +79,143 @@ const categorizeItem = (itemService: string): keyof RevenueCategoryStats | null 
   if (!itemService) return null;
   for (const category in revenueCategoryKeywords) {
     if (revenueCategoryKeywords[category as keyof RevenueCategoryStats].test(itemService)) {
-      // Special handling to avoid bar items being categorized as restaurant if also general
-      if (category === 'restaurant' && revenueCategoryKeywords.mainBar.test(itemService)) {
-        // If it matches bar terms more strongly, prioritize bar or let it be ambiguous if not clearly bar
-        // This simple keyword approach can be tricky. More robust would be predefined categories for items.
-      }
       return category as keyof RevenueCategoryStats;
     }
   }
-  return null; // Or 'other' if you want to track uncategorized revenue
+  return null;
 };
 
+type PeriodOption = 'today' | 'thisMonth' | 'thisYear';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
-  const [isLoading, setIsLoading] = useState(true); 
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>('today');
   const { toast } = useToast();
 
   const formatCurrency = (amount: number, currency: 'USD' | 'SSP') => {
     return `${currency} ${amount.toFixed(2)}`;
   };
 
-  const fetchDashboardData = useCallback(async (isInitialLoad: boolean) => {
+  const getPeriodDates = (period: PeriodOption): { startDate: Date, endDate: Date, description: string } => {
+    const now = new Date();
+    switch (period) {
+      case 'thisMonth':
+        return { 
+          startDate: startOfMonth(now), 
+          endDate: endOfMonth(now),
+          description: `for ${format(now, 'MMMM yyyy')}` 
+        };
+      case 'thisYear':
+        return { 
+          startDate: startOfYear(now), 
+          endDate: endOfYear(now),
+          description: `for ${format(now, 'yyyy')}`
+        };
+      case 'today':
+      default:
+        return { 
+          startDate: startOfDay(now), 
+          endDate: endOfDay(now),
+          description: `for Today, ${format(now, 'PPP')}`
+        };
+    }
+  };
+
+  const fetchDashboardData = useCallback(async (isInitialLoad: boolean = false) => {
     if (isInitialLoad) {
       setIsLoading(true);
     }
+
+    const { startDate, endDate } = getPeriodDates(selectedPeriod);
+    const startDateISO = startDate.toISOString();
+    const endDateISO = endDate.toISOString();
+
     try {
-      const today = new Date();
-      const startDate = format(today, "yyyy-MM-dd'T'00:00:00.000'Z'");
-      const endDate = format(today, "yyyy-MM-dd'T'23:59:59.999'Z'");
+      const revenueByCategoryUSD: RevenueCategoryStats = { rooms: 0, mainBar: 0, restaurant: 0, conferenceHalls: 0 };
 
-      const revenueByCategoryTodayUSD: RevenueCategoryStats = { rooms: 0, mainBar: 0, restaurant: 0, conferenceHalls: 0 };
-
-      // --- Today's Cash Sales (for categories and total) ---
       const { data: cashSalesData, error: cashSalesError } = await supabase
         .from('cash_sales')
         .select('amount, currency, item_service')
-        .gte('date', startDate)
-        .lte('date', endDate);
+        .gte('date', startDateISO)
+        .lte('date', endDateISO);
       if (cashSalesError) throw cashSalesError;
 
-      let cashSalesReceivedTodayUSD = 0;
-      let cashSalesReceivedTodaySSP = 0;
+      let cashSalesReceivedUSD = 0;
+      let cashSalesReceivedSSP = 0;
       cashSalesData?.forEach(sale => {
         if (sale.currency === 'USD') {
-          cashSalesReceivedTodayUSD += sale.amount;
+          cashSalesReceivedUSD += sale.amount;
           const category = categorizeItem(sale.item_service);
-          if (category) {
-            revenueByCategoryTodayUSD[category] += sale.amount;
-          }
+          if (category) revenueByCategoryUSD[category] += sale.amount;
         } else if (sale.currency === 'SSP') {
-          cashSalesReceivedTodaySSP += sale.amount;
-          // SSP categorization can be added here if needed for revenue breakdown
+          cashSalesReceivedSSP += sale.amount;
         }
       });
       
-      // --- Today's Credit Sales Originated (for categories and total) ---
       const { data: creditSalesData, error: creditSalesError } = await supabase
         .from('credit_sales')
         .select('original_amount, currency, item_service')
-        .gte('date', startDate)
-        .lte('date', endDate);
+        .gte('date', startDateISO) // Filter by origination date
+        .lte('date', endDateISO);
       if (creditSalesError) throw creditSalesError;
 
-      let totalCreditSalesOriginatedTodayUSD = 0;
-      let totalCreditSalesOriginatedTodaySSP = 0;
+      let totalCreditSalesOriginatedUSD = 0;
+      let totalCreditSalesOriginatedSSP = 0;
       creditSalesData?.forEach(sale => {
         if (sale.currency === 'USD') {
-          totalCreditSalesOriginatedTodayUSD += sale.original_amount;
+          totalCreditSalesOriginatedUSD += sale.original_amount;
+           // Only categorize credit sales originated in the period for USD revenue breakdown
           const category = categorizeItem(sale.item_service);
-          if (category) {
-            revenueByCategoryTodayUSD[category] += sale.original_amount;
-          }
+          if (category) revenueByCategoryUSD[category] += sale.original_amount;
         } else if (sale.currency === 'SSP') {
-          totalCreditSalesOriginatedTodaySSP += sale.original_amount;
-          // SSP categorization can be added here if needed for revenue breakdown
+          totalCreditSalesOriginatedSSP += sale.original_amount;
         }
       });
       
-      // --- Today's Deposits ---
       const { data: depositsData, error: depositsError } = await supabase
         .from('deposits')
         .select('amount, currency')
-        .gte('date', startDate)
-        .lte('date', endDate);
+        .gte('date', startDateISO)
+        .lte('date', endDateISO);
       if (depositsError) throw depositsError;
-      const cashDepositsTodayUSD = depositsData?.filter(d => d.currency === 'USD').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
-      const cashDepositsTodaySSP = depositsData?.filter(d => d.currency === 'SSP').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
+      const cashDepositsUSD = depositsData?.filter(d => d.currency === 'USD').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
+      const cashDepositsSSP = depositsData?.filter(d => d.currency === 'SSP').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
       
-      // --- Today's Expenses ---
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('amount') // Assuming expenses table has 'date' and 'amount'. No currency yet.
-        .gte('date', startDate) 
-        .lte('date', endDate);   
+        .select('amount') 
+        .gte('date', startDateISO) 
+        .lte('date', endDateISO);   
       if (expensesError) throw expensesError;
-      const cashExpensesTodayUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
-      const cashExpensesTodaySSP = 0; // No SSP expenses tracking yet
+      const cashExpensesUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+      const cashExpensesSSP = 0; 
 
-      // --- Outstanding Customer Credit ---
-      const { data: creditData, error: creditError } = await supabase
+      // Outstanding credit and debtors count are cumulative, not period-specific for flows
+      const { data: overallCreditData, error: overallCreditError } = await supabase
         .from('credit_sales')
         .select('balance_due, currency, customer_name')
         .in('status', ['Pending', 'Overdue']);
-      if (creditError) throw creditError;
-      const outstandingCustomerCreditUSD = creditData?.filter(c => c.currency === 'USD' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
-      const outstandingCustomerCreditSSP = creditData?.filter(c => c.currency === 'SSP' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
+      if (overallCreditError) throw overallCreditError;
+      const outstandingCustomerCreditUSD = overallCreditData?.filter(c => c.currency === 'USD' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
+      const outstandingCustomerCreditSSP = overallCreditData?.filter(c => c.currency === 'SSP' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
       
-      const distinctDebtors = new Set(creditData?.filter(c => c.balance_due > 0).map(c => c.customer_name));
+      const distinctDebtors = new Set(overallCreditData?.filter(c => c.balance_due > 0).map(c => c.customer_name));
       const activeDebtorsCount = distinctDebtors.size;
 
       setStats({
-        totalCreditSalesOriginatedTodayUSD,
-        totalCreditSalesOriginatedTodaySSP,
-        cashSalesReceivedTodayUSD,
-        cashSalesReceivedTodaySSP,
-        cashDepositsTodayUSD,
-        cashDepositsTodaySSP,
-        cashExpensesTodayUSD,
-        cashExpensesTodaySSP,
+        totalCreditSalesOriginatedUSD,
+        totalCreditSalesOriginatedSSP,
+        cashSalesReceivedUSD,
+        cashSalesReceivedSSP,
+        cashDepositsUSD,
+        cashDepositsSSP,
+        cashExpensesUSD,
+        cashExpensesSSP,
         outstandingCustomerCreditUSD,
         outstandingCustomerCreditSSP,
         activeDebtorsCount,
-        revenueByCategoryTodayUSD,
+        revenueByCategoryUSD,
       });
 
     } catch (error: any) {
@@ -210,21 +230,20 @@ export default function DashboardPage() {
         setIsLoading(false);
       }
     }
-  }, [toast, isLoading]);
+  }, [toast, isLoading, selectedPeriod]); // Added selectedPeriod
 
   useEffect(() => {
     fetchDashboardData(true); 
     const intervalId = setInterval(() => fetchDashboardData(false), 60000); 
     return () => clearInterval(intervalId);
-  }, [fetchDashboardData]);
+  }, [fetchDashboardData, selectedPeriod]); // Added selectedPeriod
 
   
   const activeDebtorsMessage = stats.activeDebtorsCount > 0 
-    ? `${stats.activeDebtorsCount} Active Debtor${stats.activeDebtorsCount > 1 ? 's' : ''}`
-    : 'No outstanding credit';
+    ? `${stats.activeDebtorsCount} Active Debtor${stats.activeDebtorsCount > 1 ? 's' : ''} (Overall)`
+    : 'No outstanding credit (Overall)';
 
-  const totalCategorizedRevenueTodayUSD = Object.values(stats.revenueByCategoryTodayUSD).reduce((sum, val) => sum + val, 0);
-
+  const totalCategorizedRevenueUSD = Object.values(stats.revenueByCategoryUSD).reduce((sum, val) => sum + val, 0);
 
   if (isLoading && stats === initialStats) { 
     return (
@@ -236,66 +255,83 @@ export default function DashboardPage() {
   }
 
   const revenueCategoriesDisplay = [
-    { name: "Rooms", value: stats.revenueByCategoryTodayUSD.rooms, icon: BedDouble, colorClass: "[&>div]:bg-blue-500" },
-    { name: "Main Bar", value: stats.revenueByCategoryTodayUSD.mainBar, icon: GlassWater, colorClass: "[&>div]:bg-green-500" },
-    { name: "Restaurant", value: stats.revenueByCategoryTodayUSD.restaurant, icon: Utensils, colorClass: "[&>div]:bg-orange-500" },
-    { name: "Conference Halls", value: stats.revenueByCategoryTodayUSD.conferenceHalls, icon: Presentation, colorClass: "[&>div]:bg-purple-500" },
+    { name: "Rooms", value: stats.revenueByCategoryUSD.rooms, icon: BedDouble, colorClass: "[&>div]:bg-blue-500" },
+    { name: "Main Bar", value: stats.revenueByCategoryUSD.mainBar, icon: GlassWater, colorClass: "[&>div]:bg-green-500" },
+    { name: "Restaurant", value: stats.revenueByCategoryUSD.restaurant, icon: Utensils, colorClass: "[&>div]:bg-orange-500" },
+    { name: "Conference Halls", value: stats.revenueByCategoryUSD.conferenceHalls, icon: Presentation, colorClass: "[&>div]:bg-purple-500" },
   ];
 
+  const periodDescription = getPeriodDates(selectedPeriod).description;
 
   return (
     <>
-      <PageTitle title="Dashboard" subtitle="Overview of hotel operations and revenue." icon={Info}>
-        {/* <Button disabled>View Full Report</Button> */}
+      <PageTitle 
+        title="Dashboard" 
+        subtitle={`Overview of hotel operations and revenue ${periodDescription}.`} 
+        icon={Info}
+      >
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-muted-foreground" />
+          <Select value={selectedPeriod} onValueChange={(value) => setSelectedPeriod(value as PeriodOption)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select period" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="today">Today</SelectItem>
+              <SelectItem value="thisMonth">This Month</SelectItem>
+              <SelectItem value="thisYear">This Year</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </PageTitle>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-6">
         <StatCard
-          title="Cash Sales Received (Today)"
+          title="Cash Sales Received"
           value={
             <>
-              <div>{formatCurrency(stats.cashSalesReceivedTodayUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.cashSalesReceivedTodaySSP, 'SSP')}</div>
+              <div>{formatCurrency(stats.cashSalesReceivedUSD, 'USD')}</div>
+              <div>{formatCurrency(stats.cashSalesReceivedSSP, 'SSP')}</div>
             </>
           }
           icon={DollarSign}
-          description="Direct cash income from sales"
+          description={`Direct cash income ${periodDescription}`}
           className="bg-gradient-to-r from-teal-500/10 to-teal-600/10 border-teal-500"
         />
         <StatCard
-          title="Credit Sales Originated (Today)"
+          title="Credit Sales Originated"
           value={
             <>
-              <div>{formatCurrency(stats.totalCreditSalesOriginatedTodayUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.totalCreditSalesOriginatedTodaySSP, 'SSP')}</div>
+              <div>{formatCurrency(stats.totalCreditSalesOriginatedUSD, 'USD')}</div>
+              <div>{formatCurrency(stats.totalCreditSalesOriginatedSSP, 'SSP')}</div>
             </>
           }
           icon={FileText} 
-          description="Value of new credit issued"
+          description={`Value of new credit issued ${periodDescription}`}
           className="bg-gradient-to-r from-green-500/10 to-green-600/10 border-green-500"
         />
         <StatCard
-          title="Bank Deposits Value (Today)"
+          title="Bank Deposits Value"
           value={
             <>
-              <div>{formatCurrency(stats.cashDepositsTodayUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.cashDepositsTodaySSP, 'SSP')}</div>
+              <div>{formatCurrency(stats.cashDepositsUSD, 'USD')}</div>
+              <div>{formatCurrency(stats.cashDepositsSSP, 'SSP')}</div>
             </>
           }
           icon={Landmark}
-          description="Total value of bank deposits"
+          description={`Total bank deposits ${periodDescription}`}
           className="bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500"
         />
         <StatCard
-          title="Expenses Value (Today)"
+          title="Expenses Value"
           value={
             <>
-              <div>{formatCurrency(stats.cashExpensesTodayUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.cashExpensesTodaySSP, 'SSP')}</div>
+              <div>{formatCurrency(stats.cashExpensesUSD, 'USD')}</div>
+              <div>{formatCurrency(stats.cashExpensesSSP, 'SSP')}</div>
             </>
           }
           icon={TrendingDown}
-          description="Total expenses (Note: SSP expenses need currency field in expenses table)"
+          description={`Total expenses ${periodDescription} (SSP not tracked)`}
            className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500"
         />
         <StatCard
@@ -307,7 +343,7 @@ export default function DashboardPage() {
             </>
           }
           icon={Users}
-          description={activeDebtorsMessage}
+          description={activeDebtorsMessage} // This remains overall
            className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500"
         />
          <StatCard
@@ -329,8 +365,8 @@ export default function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="font-headline">Revenue Breakdown (Today - USD)</CardTitle>
-            <CardDescription className="font-body">Performance of different revenue streams today (USD only for this breakdown).</CardDescription>
+            <CardTitle className="font-headline">Revenue Breakdown (USD - {selectedPeriod.replace('this', 'This ')})</CardTitle>
+            <CardDescription className="font-body">Performance of revenue streams (USD) {periodDescription}.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {revenueCategoriesDisplay.map(category => (
@@ -345,14 +381,14 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <Progress 
-                  value={totalCategorizedRevenueTodayUSD > 0 ? (category.value / totalCategorizedRevenueTodayUSD) * 100 : 0} 
+                  value={totalCategorizedRevenueUSD > 0 ? (category.value / totalCategorizedRevenueUSD) * 100 : 0} 
                   aria-label={`${category.name} revenue progress`} 
                   className={category.colorClass}
                 />
               </div>
             ))}
-             {totalCategorizedRevenueTodayUSD === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">No categorized revenue recorded in USD for today.</p>
+             {totalCategorizedRevenueUSD === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">No categorized USD revenue recorded for this period.</p>
             )}
           </CardContent>
           <CardFooter>
@@ -378,5 +414,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
-    
