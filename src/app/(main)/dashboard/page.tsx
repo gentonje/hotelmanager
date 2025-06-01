@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { StatCard } from "@/components/shared/stat-card";
+import { Button } from "@/components/ui/button";
 import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText } from "lucide-react";
 import {
   Card,
@@ -48,7 +49,7 @@ const initialStats: DashboardStats = {
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
-  const [isLoading, setIsLoading] = useState(true); // Manage initial loading state
+  const [isLoading, setIsLoading] = useState(true); 
   const { toast } = useToast();
 
   const formatCurrency = (amount: number, currency: 'USD' | 'SSP') => {
@@ -97,13 +98,12 @@ export default function DashboardPage() {
       // --- Today's Expenses ---
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('amount') // Assuming expenses table has 'amount' and 'date'
-        .gte('date', startDate) // Filter by today's date
-        .lte('date', endDate);   // Filter by today's date
+        .select('amount') 
+        .gte('date', startDate) 
+        .lte('date', endDate);   
       if (expensesError) throw expensesError;
-      // Expenses table currently lacks a currency column. All expenses are summed as USD.
       const cashExpensesTodayUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
-      const cashExpensesTodaySSP = 0; // Explicitly zero as no SSP expenses can be identified
+      const cashExpensesTodaySSP = 0; 
 
       // --- Outstanding Customer Credit ---
       const { data: creditData, error: creditError } = await supabase
@@ -137,17 +137,17 @@ export default function DashboardPage() {
         description: error.message,
         variant: "destructive",
       });
-      if (isInitialLoad) setStats(initialStats); // Reset stats on initial load error
+      if (isInitialLoad) setStats(initialStats); 
     } finally {
-      if (isInitialLoad) {
+      if (isLoading && isInitialLoad) { 
         setIsLoading(false);
       }
     }
-  }, [toast]);
+  }, [toast, isLoading]);
 
   useEffect(() => {
-    fetchDashboardData(true); // Initial fetch
-    const intervalId = setInterval(() => fetchDashboardData(false), 60000); // Refresh every 60 seconds
+    fetchDashboardData(true); 
+    const intervalId = setInterval(() => fetchDashboardData(false), 60000); 
     return () => clearInterval(intervalId);
   }, [fetchDashboardData]);
 
@@ -157,7 +157,7 @@ export default function DashboardPage() {
     : 'No outstanding credit';
 
 
-  if (isLoading && stats === initialStats) { // Show loader only on initial load and if no data yet
+  if (isLoading && stats === initialStats) { 
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -193,7 +193,7 @@ export default function DashboardPage() {
               <div>{formatCurrency(stats.totalCreditSalesOriginatedTodaySSP, 'SSP')}</div>
             </>
           }
-          icon={FileText} // Changed icon to FileText
+          icon={FileText} 
           description="Value of new credit issued"
           className="bg-gradient-to-r from-green-500/10 to-green-600/10 border-green-500"
         />
