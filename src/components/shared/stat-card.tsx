@@ -1,11 +1,13 @@
 
+"use client";
+
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface StatCardProps {
   title: string;
-  value: React.ReactNode; // Changed from string to React.ReactNode
+  value: React.ReactNode;
   icon?: LucideIcon;
   description?: string;
   className?: string;
@@ -20,9 +22,9 @@ export function StatCard({ title, value, icon: Icon, description, className, foo
         {Icon && <Icon className="h-5 w-5 text-muted-foreground" />}
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold font-headline">{value}</div>
+        <div className="text-2xl font-bold font-headline">{value}</div>
         {description && (
-          <p className="text-xs text-muted-foreground pt-1 font-body">{description}</p>
+          <p className="text-xs text-foreground/70 pt-1 font-body">{description}</p>
         )}
         {footer && <div className="mt-4 text-sm">{footer}</div>}
       </CardContent>
