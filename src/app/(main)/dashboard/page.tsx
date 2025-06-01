@@ -1,13 +1,12 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useToast } from "@/hooks/use-toast";
 import { PageTitle } from "@/components/shared/page-title";
 import { StatCard } from "@/components/shared/stat-card";
-import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, AlertTriangle, Info, Loader2, HandCoins, Coins } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { DollarSign, TrendingUp, TrendingDown, Landmark, Users, Info, Loader2, HandCoins, Coins, FileText } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -20,20 +19,22 @@ import { Progress } from "@/components/ui/progress";
 import { format } from 'date-fns';
 
 interface DashboardStats {
-  totalCreditSalesTodayUSD: number;
-  totalCreditSalesTodaySSP: number;
+  totalCreditSalesOriginatedTodayUSD: number;
+  totalCreditSalesOriginatedTodaySSP: number;
   cashDepositsTodayUSD: number;
   cashDepositsTodaySSP: number;
-  cashExpensesTodayUSD: number; // Assuming primarily one currency or needs further breakdown logic
-  cashExpensesTodaySSP: number; // Placeholder, as expenses table might not have currency
+  cashExpensesTodayUSD: number;
+  cashExpensesTodaySSP: number;
   outstandingCustomerCreditUSD: number;
   outstandingCustomerCreditSSP: number;
   activeDebtorsCount: number;
+  cashSalesReceivedTodayUSD: number;
+  cashSalesReceivedTodaySSP: number;
 }
 
 const initialStats: DashboardStats = {
-  totalCreditSalesTodayUSD: 0,
-  totalCreditSalesTodaySSP: 0,
+  totalCreditSalesOriginatedTodayUSD: 0,
+  totalCreditSalesOriginatedTodaySSP: 0,
   cashDepositsTodayUSD: 0,
   cashDepositsTodaySSP: 0,
   cashExpensesTodayUSD: 0,
@@ -41,98 +42,114 @@ const initialStats: DashboardStats = {
   outstandingCustomerCreditUSD: 0,
   outstandingCustomerCreditSSP: 0,
   activeDebtorsCount: 0,
+  cashSalesReceivedTodayUSD: 0,
+  cashSalesReceivedTodaySSP: 0,
 };
 
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>(initialStats);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Manage initial loading state
   const { toast } = useToast();
 
   const formatCurrency = (amount: number, currency: 'USD' | 'SSP') => {
     return `${currency} ${amount.toFixed(2)}`;
   };
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async (isInitialLoad: boolean) => {
+    if (isInitialLoad) {
       setIsLoading(true);
-      try {
-        const today = new Date();
-        const startDate = format(today, "yyyy-MM-dd'T'00:00:00.000'Z'");
-        const endDate = format(today, "yyyy-MM-dd'T'23:59:59.999'Z'");
+    }
+    try {
+      const today = new Date();
+      const startDate = format(today, "yyyy-MM-dd'T'00:00:00.000'Z'");
+      const endDate = format(today, "yyyy-MM-dd'T'23:59:59.999'Z'");
 
-        // --- Today's Credit Sales ---
-        const { data: salesData, error: salesError } = await supabase
-          .from('credit_sales')
-          .select('original_amount, currency')
-          .gte('date', startDate)
-          .lte('date', endDate);
-        if (salesError) throw salesError;
-        const totalCreditSalesTodayUSD = salesData?.filter(s => s.currency === 'USD').reduce((sum, sale) => sum + sale.original_amount, 0) || 0;
-        const totalCreditSalesTodaySSP = salesData?.filter(s => s.currency === 'SSP').reduce((sum, sale) => sum + sale.original_amount, 0) || 0;
+      // --- Today's Credit Sales Originated ---
+      const { data: salesData, error: salesError } = await supabase
+        .from('credit_sales')
+        .select('original_amount, currency')
+        .gte('date', startDate)
+        .lte('date', endDate);
+      if (salesError) throw salesError;
+      const totalCreditSalesOriginatedTodayUSD = salesData?.filter(s => s.currency === 'USD').reduce((sum, sale) => sum + sale.original_amount, 0) || 0;
+      const totalCreditSalesOriginatedTodaySSP = salesData?.filter(s => s.currency === 'SSP').reduce((sum, sale) => sum + sale.original_amount, 0) || 0;
 
-        // --- Today's Deposits ---
-        const { data: depositsData, error: depositsError } = await supabase
-          .from('deposits')
-          .select('amount, currency')
-          .gte('date', startDate)
-          .lte('date', endDate);
-        if (depositsError) throw depositsError;
-        const cashDepositsTodayUSD = depositsData?.filter(d => d.currency === 'USD').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
-        const cashDepositsTodaySSP = depositsData?.filter(d => d.currency === 'SSP').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
-        
-        // --- Today's Expenses ---
-        // Note: Expenses table currently lacks a 'currency' column and a 'date' column matching other tables.
-        // This will sum all expenses and assume USD for now. SSP expenses are 0.
-        // Add 'currency' and a proper 'date' to 'expenses' table for accurate multi-currency tracking.
-        const { data: expensesData, error: expensesError } = await supabase
-          .from('expenses')
-          .select('amount') // Ideally: select('amount, currency, date')
-          // .gte('date', startDate) // Would need date field in expenses
-          // .lte('date', endDate);
-        if (expensesError) throw expensesError;
-        const cashExpensesTodayUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
-        const cashExpensesTodaySSP = 0; // Placeholder until expenses table has currency
+      // --- Today's Cash Sales Received ---
+      const { data: cashSalesData, error: cashSalesError } = await supabase
+        .from('cash_sales')
+        .select('amount, currency')
+        .gte('date', startDate)
+        .lte('date', endDate);
+      if (cashSalesError) throw cashSalesError;
+      const cashSalesReceivedTodayUSD = cashSalesData?.filter(s => s.currency === 'USD').reduce((sum, sale) => sum + sale.amount, 0) || 0;
+      const cashSalesReceivedTodaySSP = cashSalesData?.filter(s => s.currency === 'SSP').reduce((sum, sale) => sum + sale.amount, 0) || 0;
+      
+      // --- Today's Deposits ---
+      const { data: depositsData, error: depositsError } = await supabase
+        .from('deposits')
+        .select('amount, currency')
+        .gte('date', startDate)
+        .lte('date', endDate);
+      if (depositsError) throw depositsError;
+      const cashDepositsTodayUSD = depositsData?.filter(d => d.currency === 'USD').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
+      const cashDepositsTodaySSP = depositsData?.filter(d => d.currency === 'SSP').reduce((sum, deposit) => sum + deposit.amount, 0) || 0;
+      
+      // --- Today's Expenses ---
+      const { data: expensesData, error: expensesError } = await supabase
+        .from('expenses')
+        .select('amount') // Assuming expenses table has 'amount' and 'date'
+        .gte('date', startDate) // Filter by today's date
+        .lte('date', endDate);   // Filter by today's date
+      if (expensesError) throw expensesError;
+      // Expenses table currently lacks a currency column. All expenses are summed as USD.
+      const cashExpensesTodayUSD = expensesData?.reduce((sum, expense) => sum + expense.amount, 0) || 0;
+      const cashExpensesTodaySSP = 0; // Explicitly zero as no SSP expenses can be identified
 
-        // --- Outstanding Customer Credit ---
-        const { data: creditData, error: creditError } = await supabase
-          .from('credit_sales')
-          .select('balance_due, currency, customer_name')
-          .in('status', ['Pending', 'Overdue']);
-        if (creditError) throw creditError;
-        const outstandingCustomerCreditUSD = creditData?.filter(c => c.currency === 'USD' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
-        const outstandingCustomerCreditSSP = creditData?.filter(c => c.currency === 'SSP' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
-        
-        const distinctDebtors = new Set(creditData?.filter(c => c.balance_due > 0).map(c => c.customer_name));
-        const activeDebtorsCount = distinctDebtors.size;
+      // --- Outstanding Customer Credit ---
+      const { data: creditData, error: creditError } = await supabase
+        .from('credit_sales')
+        .select('balance_due, currency, customer_name')
+        .in('status', ['Pending', 'Overdue']);
+      if (creditError) throw creditError;
+      const outstandingCustomerCreditUSD = creditData?.filter(c => c.currency === 'USD' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
+      const outstandingCustomerCreditSSP = creditData?.filter(c => c.currency === 'SSP' && c.balance_due > 0).reduce((sum, sale) => sum + sale.balance_due, 0) || 0;
+      
+      const distinctDebtors = new Set(creditData?.filter(c => c.balance_due > 0).map(c => c.customer_name));
+      const activeDebtorsCount = distinctDebtors.size;
 
-        setStats({
-          totalCreditSalesTodayUSD,
-          totalCreditSalesTodaySSP,
-          cashDepositsTodayUSD,
-          cashDepositsTodaySSP,
-          cashExpensesTodayUSD,
-          cashExpensesTodaySSP,
-          outstandingCustomerCreditUSD,
-          outstandingCustomerCreditSSP,
-          activeDebtorsCount,
-        });
+      setStats({
+        totalCreditSalesOriginatedTodayUSD,
+        totalCreditSalesOriginatedTodaySSP,
+        cashSalesReceivedTodayUSD,
+        cashSalesReceivedTodaySSP,
+        cashDepositsTodayUSD,
+        cashDepositsTodaySSP,
+        cashExpensesTodayUSD,
+        cashExpensesTodaySSP,
+        outstandingCustomerCreditUSD,
+        outstandingCustomerCreditSSP,
+        activeDebtorsCount,
+      });
 
-      } catch (error: any) {
-        toast({
-          title: "Error fetching dashboard data",
-          description: error.message,
-          variant: "destructive",
-        });
-        setStats(initialStats); 
-      } finally {
+    } catch (error: any) {
+      toast({
+        title: "Error fetching dashboard data",
+        description: error.message,
+        variant: "destructive",
+      });
+      if (isInitialLoad) setStats(initialStats); // Reset stats on initial load error
+    } finally {
+      if (isInitialLoad) {
         setIsLoading(false);
       }
-    };
-
-    fetchDashboardData();
-    const intervalId = setInterval(fetchDashboardData, 60000); // Refresh every 60 seconds
-    return () => clearInterval(intervalId);
+    }
   }, [toast]);
+
+  useEffect(() => {
+    fetchDashboardData(true); // Initial fetch
+    const intervalId = setInterval(() => fetchDashboardData(false), 60000); // Refresh every 60 seconds
+    return () => clearInterval(intervalId);
+  }, [fetchDashboardData]);
 
   
   const activeDebtorsMessage = stats.activeDebtorsCount > 0 
@@ -140,7 +157,7 @@ export default function DashboardPage() {
     : 'No outstanding credit';
 
 
-  if (isLoading) {
+  if (isLoading && stats === initialStats) { // Show loader only on initial load and if no data yet
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -151,21 +168,33 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageTitle title="Dashboard" subtitle="Overview of hotel operations and revenue." icon={DollarSign}>
+      <PageTitle title="Dashboard" subtitle="Overview of hotel operations and revenue." icon={Info}>
         {/* <Button disabled>View Full Report</Button> */}
       </PageTitle>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-6">
         <StatCard
-          title="Credit Sales Value (Today)"
+          title="Cash Sales Received (Today)"
           value={
             <>
-              <div>{formatCurrency(stats.totalCreditSalesTodayUSD, 'USD')}</div>
-              <div>{formatCurrency(stats.totalCreditSalesTodaySSP, 'SSP')}</div>
+              <div>{formatCurrency(stats.cashSalesReceivedTodayUSD, 'USD')}</div>
+              <div>{formatCurrency(stats.cashSalesReceivedTodaySSP, 'SSP')}</div>
             </>
           }
-          icon={TrendingUp}
-          description="Sum of new credit sales"
+          icon={DollarSign}
+          description="Direct cash income from sales"
+          className="bg-gradient-to-r from-teal-500/10 to-teal-600/10 border-teal-500"
+        />
+        <StatCard
+          title="Credit Sales Originated (Today)"
+          value={
+            <>
+              <div>{formatCurrency(stats.totalCreditSalesOriginatedTodayUSD, 'USD')}</div>
+              <div>{formatCurrency(stats.totalCreditSalesOriginatedTodaySSP, 'SSP')}</div>
+            </>
+          }
+          icon={FileText} // Changed icon to FileText
+          description="Value of new credit issued"
           className="bg-gradient-to-r from-green-500/10 to-green-600/10 border-green-500"
         />
         <StatCard
@@ -189,7 +218,7 @@ export default function DashboardPage() {
             </>
           }
           icon={TrendingDown}
-          description="Total expenses (Note: SSP expenses may not be tracked yet)"
+          description="Total expenses (Note: SSP expenses need currency field in expenses table)"
            className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500"
         />
         <StatCard
@@ -279,3 +308,4 @@ export default function DashboardPage() {
     </>
   );
 }
+
