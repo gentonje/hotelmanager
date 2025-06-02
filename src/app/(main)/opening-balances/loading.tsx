@@ -9,24 +9,24 @@ export default function OpeningBalancesLoading() {
     <>
       <PageTitle title="Opening Balances" subtitle="Set the starting financial figures for your accounting period." icon={ArchiveRestore} />
 
-      <Card className="mb-1 sm:mb-6 shadow-lg"> {/* Adjusted margin */}
+      <Card className="shadow-lg m-2"> 
         <CardHeader>
           <CardTitle className="font-headline">Accounting Start Date</CardTitle>
           <CardDescription className="font-body">Select the date for which these opening balances apply...</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           <Skeleton className="h-10 w-full sm:w-[280px]" /> {/* Date Picker Button */}
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-1 sm:mb-6"> {/* Adjusted margin */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
         {[...Array(2)].map((_, i) => ( 
-          <Card key={`major-cat-${i}`} className="shadow-md">
+          <Card key={`major-cat-${i}`} className="shadow-md m-2">
             <CardHeader>
               <Skeleton className="h-6 w-1/2 mb-2" /> {/* CardTitle */}
               { i === 1 && <Skeleton className="h-4 w-3/4 mb-1" /> } {/* Optional CardDescription */}
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-1">
               <div>
                 <Skeleton className="h-4 w-1/3 mb-1" /> {/* Label */}
                 <Skeleton className="h-10 w-full" /> {/* Input */}
@@ -47,14 +47,14 @@ export default function OpeningBalancesLoading() {
       </div>
 
       {[...Array(3)].map((_, outerIndex) => ( 
-        <Card key={`list-cat-${outerIndex}`} className="mb-1 sm:mb-6 shadow-md"> {/* Adjusted margin */}
+        <Card key={`list-cat-${outerIndex}`} className="shadow-md m-2 mb-1 sm:mb-2"> 
           <CardHeader>
             <Skeleton className="h-6 w-1/3 mb-2" /> {/* CardTitle */}
             <Skeleton className="h-4 w-2/3 mb-1" /> {/* CardDescription */}
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-1">
             {[...Array(2)].map((_, itemIndex) => ( 
-              <div key={`item-${outerIndex}-${itemIndex}`} className="p-4 border rounded-md bg-card/50">
+              <div key={`item-${outerIndex}-${itemIndex}`} className="p-4 border rounded-md bg-card/50 space-y-1">
                 <Skeleton className="h-5 w-1/4 mb-2" /> {/* Item Title (Bank/Customer/Vendor Name) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -73,10 +73,9 @@ export default function OpeningBalancesLoading() {
         </Card>
       ))}
 
-      <div className="mt-8 flex justify-end">
+      <div className="mt-8 flex justify-end m-2">
         <Skeleton className="h-12 w-64" /> {/* Save Button */}
       </div>
     </>
   );
 }
-

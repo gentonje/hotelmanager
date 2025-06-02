@@ -93,7 +93,7 @@ export default function CustomersPage() {
     }
     setIsSubmitting(true);
 
-    const customerToSave: Partial<Customer> = { // Omit ID for inserts
+    const customerToSave: Partial<Customer> = { 
       name: currentCustomer.name!,
       email: currentCustomer.email,
       phone: currentCustomer.phone,
@@ -112,15 +112,15 @@ export default function CustomersPage() {
     } else {
       const customerWithId = {
         ...customerToSave,
-        id: `cust_${Date.now()}` // Client-side ID generation
+        id: `cust_${Date.now()}` 
       };
       const { data, error: insertError } = await supabase
         .from('customers')
         .insert([customerWithId])
-        .select() // select to get the inserted data back if needed
+        .select() 
         .single();
       error = insertError;
-      if(data) savedCustomerName = data.name; // ensure we use the exact saved name
+      if(data) savedCustomerName = data.name; 
     }
 
     if (error) {
@@ -129,14 +129,13 @@ export default function CustomersPage() {
       toast({ title: `Customer ${editingCustomer ? 'updated' : 'added'} successfully`, variant: "default" });
       
       const redirectUrl = searchParams.get('redirect');
-      const newCustomerOrigin = searchParams.get('newCustomerOrigin');
+      const newCustomerOrigin = searchParams.get('newEntityOrigin');
 
-      if (redirectUrl && newCustomerOrigin && (newCustomerOrigin === 'transactionShortfall' || newCustomerOrigin === 'transactionCredit' || newCustomerOrigin === 'transactionDeposit') && savedCustomerName) {
-        resetForm(); // Reset this modal
-        // Navigate back with the new customer's name
-        router.push(`${redirectUrl}?newCustomerName=${encodeURIComponent(savedCustomerName)}`);
+      if (redirectUrl && newCustomerOrigin && (newCustomerOrigin === 'transactionShortfall' || newCustomerOrigin === 'transactionCreditSale' || newCustomerOrigin === 'transactionDeposit') && savedCustomerName) {
+        resetForm(); 
+        
+        router.push(`${redirectUrl}?newEntityName=${encodeURIComponent(savedCustomerName)}&newEntityOrigin=${newCustomerOrigin}`);
       } else {
-        // Normal customer addition
         resetForm();
         fetchCustomers();
       }
@@ -188,7 +187,7 @@ export default function CustomersPage() {
               {editingCustomer ? 'Update the details of this customer.' : 'Enter details for a new customer.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <form onSubmit={handleSubmit} className="space-y-1 py-4">
             <div className="grid gap-2">
               <Label htmlFor="name" className="font-body">Customer Name</Label>
               <Input id="name" name="name" value={currentCustomer.name || ''} onChange={handleInputChange} required disabled={isSubmitting} />
@@ -218,12 +217,12 @@ export default function CustomersPage() {
         </DialogContent>
       </Dialog>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <CardTitle className="font-headline">Customers List</CardTitle>
            <CardDescription className="font-body">All registered customers.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           {isLoading ? (
             <div className="flex justify-center items-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -287,6 +286,3 @@ export default function CustomersPage() {
     </>
   );
 }
-
-
-    

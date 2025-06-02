@@ -245,7 +245,7 @@ export default function DepositsPage() {
               {editingDeposit ? "Update the details of the bank deposit." : "Enter the details of the new bank deposit."}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <form onSubmit={handleSubmit} className="space-y-1 py-4">
             <div className="grid gap-2">
               <Label htmlFor="date" className="font-body">Date</Label>
               <Popover>
@@ -330,12 +330,12 @@ export default function DepositsPage() {
         </DialogContent>
       </Dialog>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <CardTitle className="font-headline">Deposit History</CardTitle>
           <CardDescription className="font-body">A log of all recorded bank deposits.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           {isLoading ? (
              <div className="flex justify-center items-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />

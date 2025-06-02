@@ -8,13 +8,13 @@ export default function TransactionsLoading() {
   return (
     <>
       <PageTitle title="Record Transaction" subtitle="Log sales, deposits, or purchases." icon={ListChecks} />
-      <Card className="shadow-xl max-w-2xl mx-auto">
+      <Card className="shadow-xl max-w-2xl mx-auto m-2">
         <CardHeader>
           <CardTitle className="font-headline text-2xl">New Transaction</CardTitle>
           <CardDescription className="font-body">Select the type of transaction and fill in the details below.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-6">
+        <CardContent className="space-y-1">
+          <div className="space-y-1">
             <div className="grid gap-2">
               <Skeleton className="h-5 w-1/4 mb-1" /> {/* Label */}
               <Skeleton className="h-12 w-full" /> {/* Select Trigger */}

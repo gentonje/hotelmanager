@@ -11,19 +11,19 @@ export default function InventoryLoading() {
     <>
       <PageTitle title="Inventory Management" subtitle="Track stock levels across various hotel sections." icon={Archive} />
 
-      <Tabs defaultValue="bar" className="w-full">
+      <Tabs defaultValue="bar" className="w-full m-2">
         <div className="flex justify-between items-center mb-4">
           <Skeleton className="h-10 w-72" /> {/* TabsList */}
           <Skeleton className="h-10 w-52" /> {/* Add New Item Button */}
         </div>
         
         <TabsContent value="bar"> {/* Default to showing one content skeleton */}
-          <Card className="shadow-lg">
+          <Card className="shadow-lg m-2">
             <CardHeader>
               <Skeleton className="h-6 w-1/3 mb-2" /> {/* CardTitle */}
               <Skeleton className="h-4 w-2/3" /> {/* CardDescription */}
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-1">
               <Table>
                 <TableHeader>
                   <TableRow>

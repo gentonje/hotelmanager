@@ -15,7 +15,6 @@ import { Loader2, BookText, CalendarIcon, Filter, XCircle } from "lucide-react";
 import { format, parseISO, startOfDay, endOfDay, startOfYear } from "date-fns";
 import { cn } from "@/lib/utils";
 
-// Interfaces from other modules (ensure paths are correct if they are moved/changed)
 import type { CashSale } from '@/app/(main)/transactions/page';
 import type { CreditSale } from '@/app/(main)/credit/page';
 import type { Deposit } from '@/app/(main)/deposits/page';
@@ -38,7 +37,7 @@ type LedgerEntryType =
 
 interface LedgerEntry {
   id: string;
-  date: string; // ISO string or YYYY-MM-DD for opening balances
+  date: string; 
   description: string;
   type: LedgerEntryType;
   amount: number;
@@ -47,7 +46,7 @@ interface LedgerEntry {
   source_table: string;
 }
 
-const ITEMS_PER_PAGE = 25; // Increased items per page
+const ITEMS_PER_PAGE = 25; 
 
 export default function LedgerPage() {
   const [allLedgerEntries, setAllLedgerEntries] = useState<LedgerEntry[]>([]);
@@ -70,9 +69,6 @@ export default function LedgerPage() {
       const queryStartDate = filterStartDate ? startOfDay(filterStartDate).toISOString() : undefined;
       const queryEndDate = filterEndDate ? endOfDay(filterEndDate).toISOString() : undefined;
 
-      // Fetch Opening Balances for the start of the current year
-      // These are added regardless of the date filter for now, as they form the baseline.
-      // A more advanced filter might exclude them if the filter range is completely outside the OB date.
       const accountingStartDateForOpeningBalances = startOfYear(new Date()).toISOString().split('T')[0];
       const { data: openingBalances, error: openingBalancesError } = await supabase
         .from('opening_balances')
@@ -93,12 +89,12 @@ export default function LedgerPage() {
             case 'CUSTOMER_DEBT': ledgerEntryType = `Opening Balance - Receivable`; break;
             case 'VENDOR_CREDIT': ledgerEntryType = `Opening Balance - Payable`; break;
             case 'OTHER_PAYABLE': ledgerEntryType = `Opening Balance - Other Payable`; break;
-            default: ledgerEntryType = `Opening Balance - Other Payable`; // Fallback
+            default: ledgerEntryType = `Opening Balance - Other Payable`; 
           }
 
           collectedEntries.push({
             id: `ob_${ob.id || ob.account_name.replace(/\s+/g, '_') + '_' + ob.currency}`,
-            date: ob.balance_date, // YYYY-MM-DD string
+            date: ob.balance_date, 
             description: description,
             type: ledgerEntryType,
             amount: ob.amount,
@@ -110,7 +106,6 @@ export default function LedgerPage() {
       }
 
 
-      // 1. Fetch Cash Sales
       let cashQuery = supabase.from('cash_sales').select('*');
       if (queryStartDate) cashQuery = cashQuery.gte('date', queryStartDate);
       if (queryEndDate) cashQuery = cashQuery.lte('date', queryEndDate);
@@ -129,7 +124,6 @@ export default function LedgerPage() {
         });
       });
 
-      // 2. Fetch Credit Sales (Issued)
       let creditQuery = supabase.from('credit_sales').select('*, customer_name, item_service, original_amount, currency, date');
       if (queryStartDate) creditQuery = creditQuery.gte('date', queryStartDate);
       if (queryEndDate) creditQuery = creditQuery.lte('date', queryEndDate);
@@ -148,7 +142,6 @@ export default function LedgerPage() {
         });
       });
 
-      // 3. Fetch Deposits
       let depositQuery = supabase.from('deposits').select('*');
       if (queryStartDate) depositQuery = depositQuery.gte('date', queryStartDate);
       if (queryEndDate) depositQuery = depositQuery.lte('date', queryEndDate);
@@ -173,7 +166,6 @@ export default function LedgerPage() {
         });
       });
 
-      // 4. Fetch Expenses
       let expenseQuery = supabase.from('expenses').select('*');
       if (queryStartDate) expenseQuery = expenseQuery.gte('date', queryStartDate);
       if (queryEndDate) expenseQuery = expenseQuery.lte('date', queryEndDate);
@@ -186,7 +178,7 @@ export default function LedgerPage() {
           description: expense.paid_to ? `${expense.description} (Paid to: ${expense.paid_to})` : expense.description,
           type: "Expense",
           amount: expense.amount,
-          currency: "USD", 
+          currency: expense.currency, 
           transaction_id: expense.id,
           source_table: 'expenses',
         });
@@ -243,7 +235,7 @@ export default function LedgerPage() {
 
   const getAmountSignAndColor = (entry: LedgerEntry) => {
     const isDebitNature = entry.type.includes("Expense") || entry.type.includes("Payable");
-    const isCreditNatureAssetDecrease = entry.type.includes("Credit Issued"); // This is a special case, it's an asset (receivable) but a contingent one.
+    const isCreditNatureAssetDecrease = entry.type.includes("Credit Issued"); 
 
     let sign = '+';
     let colorClass = 'text-green-600 dark:text-green-400';
@@ -252,7 +244,7 @@ export default function LedgerPage() {
       sign = '-';
       colorClass = 'text-destructive';
     } else if (isCreditNatureAssetDecrease) {
-      sign = ''; // No sign for credit issued, it's a contingent asset
+      sign = ''; 
       colorClass = 'text-orange-600 dark:text-orange-400';
     }
     return { sign, colorClass };
@@ -263,11 +255,11 @@ export default function LedgerPage() {
     <>
       <PageTitle title="General Ledger" subtitle="A chronological record of all financial transactions." icon={BookText} />
 
-      <Card className="shadow-lg mb-6">
+      <Card className="shadow-lg mb-6 m-2">
         <CardHeader>
           <CardTitle className="font-headline">Filters</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row gap-4 items-center">
+        <CardContent className="flex flex-col sm:flex-row gap-1 items-center space-y-1 sm:space-y-0 sm:space-x-1">
           <div className="grid gap-2 w-full sm:w-auto">
             <Label htmlFor="start-date" className="font-body">Start Date</Label>
             <Popover>
@@ -315,7 +307,7 @@ export default function LedgerPage() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <CardTitle className="font-headline">All Transactions</CardTitle>
           <CardDescription className="font-body">
@@ -328,7 +320,7 @@ export default function LedgerPage() {
               : "Browse through all recorded financial activities, including start-of-year opening balances."}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           {isLoading ? (
             <div className="flex justify-center items-center h-64">
               <Loader2 className="h-12 w-12 animate-spin text-primary" />

@@ -117,7 +117,7 @@ export default function BanksPage() {
     } else {
       const bankWithId = {
         ...bankToSave,
-        id: `bank_${Date.now()}` // Client-side ID generation
+        id: `bank_${Date.now()}` 
       };
       const { error: insertError } = await supabase
         .from('banks')
@@ -130,7 +130,7 @@ export default function BanksPage() {
     } else {
       toast({ title: `Bank ${editingBank ? 'updated' : 'added'} successfully`, variant: "default" });
       resetForm();
-      fetchBanks(); // Refresh the list
+      fetchBanks(); 
     }
     setIsSubmitting(false);
   };
@@ -158,7 +158,7 @@ export default function BanksPage() {
       toast({ title: "Error deleting bank", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Bank deleted successfully", variant: "default" });
-      fetchBanks(); // Refresh the list
+      fetchBanks(); 
     }
     setIsSubmitting(false);
   };
@@ -179,7 +179,7 @@ export default function BanksPage() {
               {editingBank ? 'Update the details of this bank account.' : 'Enter details for a new bank account.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <form onSubmit={handleSubmit} className="space-y-1 py-4">
             <div className="grid gap-2">
               <Label htmlFor="name" className="font-body">Bank Name</Label>
               <Input id="name" name="name" value={currentBank.name || ''} onChange={handleInputChange} required disabled={isSubmitting} />
@@ -211,12 +211,12 @@ export default function BanksPage() {
         </DialogContent>
       </Dialog>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <CardTitle className="font-headline">Bank Accounts List</CardTitle>
            <CardDescription className="font-body">All registered bank accounts.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           {isLoading ? (
             <div className="flex justify-center items-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />

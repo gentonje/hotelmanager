@@ -21,9 +21,9 @@ import type { Vendor } from '@/app/(main)/vendors/page';
 
 type Currency = 'USD' | 'SSP';
 
-interface OpeningBalanceEntry {
-  id?: string; // From DB
-  balance_date: string; // ISO string
+export interface OpeningBalanceEntry {
+  id?: string; 
+  balance_date: string; 
   account_type: string;
   account_id?: string | null;
   account_name: string;
@@ -69,7 +69,6 @@ export default function OpeningBalancesPage() {
     const formattedDate = format(date, "yyyy-MM-dd");
 
     try {
-      // Fetch existing opening balances for the selected date
       const { data: existingBalances, error: balancesError } = await supabase
         .from('opening_balances')
         .select('*')
@@ -79,7 +78,7 @@ export default function OpeningBalancesPage() {
       const getBalance = (type: string, accId: string | undefined, curr: Currency): number => {
         const bal = existingBalances?.find(b => 
           b.account_type === type && 
-          (accId ? b.account_id === accId : true) && // account_id can be null for CASH_ON_HAND
+          (accId ? b.account_id === accId : true) && 
           b.currency === curr
         );
         return bal ? bal.amount : 0;
@@ -159,40 +158,34 @@ export default function OpeningBalancesPage() {
     const formattedDate = format(accountingStartDate, "yyyy-MM-dd");
     const balancesToUpsert: Omit<OpeningBalanceEntry, 'id'>[] = [];
 
-    // Cash on Hand
     if (cashOnHandUSD >= 0) balancesToUpsert.push({ balance_date: formattedDate, account_type: 'CASH_ON_HAND', account_name: 'Cash on Hand USD', amount: cashOnHandUSD, currency: 'USD' });
     if (cashOnHandSSP >= 0) balancesToUpsert.push({ balance_date: formattedDate, account_type: 'CASH_ON_HAND', account_name: 'Cash on Hand SSP', amount: cashOnHandSSP, currency: 'SSP' });
 
-    // Bank Accounts
     banks.forEach(b => {
       if (b.opening_balance_usd >= 0 && b.currency === 'USD') balancesToUpsert.push({ balance_date: formattedDate, account_type: 'BANK_ACCOUNT', account_id: b.id, account_name: `${b.name} (USD)`, amount: b.opening_balance_usd, currency: 'USD' });
       if (b.opening_balance_ssp >= 0 && b.currency === 'SSP') balancesToUpsert.push({ balance_date: formattedDate, account_type: 'BANK_ACCOUNT', account_id: b.id, account_name: `${b.name} (SSP)`, amount: b.opening_balance_ssp, currency: 'SSP' });
-      // Handle banks with dual currencies or if a bank can have opening in a currency not its primary
        if (b.opening_balance_usd >= 0 && b.currency !== 'USD') balancesToUpsert.push({ balance_date: formattedDate, account_type: 'BANK_ACCOUNT', account_id: b.id, account_name: `${b.name} (Opening USD for ${b.currency} Bank)`, amount: b.opening_balance_usd, currency: 'USD' });
        if (b.opening_balance_ssp >= 0 && b.currency !== 'SSP') balancesToUpsert.push({ balance_date: formattedDate, account_type: 'BANK_ACCOUNT', account_id: b.id, account_name: `${b.name} (Opening SSP for ${b.currency} Bank)`, amount: b.opening_balance_ssp, currency: 'SSP' });
 
     });
     
-    // Customer Debts
     customers.forEach(c => {
       if (c.opening_balance_usd > 0) balancesToUpsert.push({ balance_date: formattedDate, account_type: 'CUSTOMER_DEBT', account_id: c.id, account_name: `Customer: ${c.name} (USD)`, amount: c.opening_balance_usd, currency: 'USD' });
       if (c.opening_balance_ssp > 0) balancesToUpsert.push({ balance_date: formattedDate, account_type: 'CUSTOMER_DEBT', account_id: c.id, account_name: `Customer: ${c.name} (SSP)`, amount: c.opening_balance_ssp, currency: 'SSP' });
     });
 
-    // Vendor Credits
     vendors.forEach(v => {
       if (v.opening_balance_usd > 0) balancesToUpsert.push({ balance_date: formattedDate, account_type: 'VENDOR_CREDIT', account_id: v.id, account_name: `Vendor: ${v.name} (USD)`, amount: v.opening_balance_usd, currency: 'USD' });
       if (v.opening_balance_ssp > 0) balancesToUpsert.push({ balance_date: formattedDate, account_type: 'VENDOR_CREDIT', account_id: v.id, account_name: `Vendor: ${v.name} (SSP)`, amount: v.opening_balance_ssp, currency: 'SSP' });
     });
     
-    // Other Payables
     if (otherPayablesUSD > 0) balancesToUpsert.push({ balance_date: formattedDate, account_type: 'OTHER_PAYABLE', account_name: 'Other Payables USD', amount: otherPayablesUSD, currency: 'USD', description: otherPayablesDescription });
     if (otherPayablesSSP > 0) balancesToUpsert.push({ balance_date: formattedDate, account_type: 'OTHER_PAYABLE', account_name: 'Other Payables SSP', amount: otherPayablesSSP, currency: 'SSP', description: otherPayablesDescription });
 
     try {
       const { error } = await supabase
         .from('opening_balances')
-        .upsert(balancesToUpsert, { onConflict: 'balance_date,account_type,account_id,currency', ignoreDuplicates: false }); // Ensure account_id is part of conflict for unique entries
+        .upsert(balancesToUpsert, { onConflict: 'balance_date,account_type,account_id,currency', ignoreDuplicates: false }); 
 
       if (error) throw error;
       toast({ title: "Opening Balances Saved", description: "Your opening balances have been successfully saved.", variant: "default" });
@@ -200,7 +193,7 @@ export default function OpeningBalancesPage() {
       toast({ title: "Error Saving Balances", description: error.message, variant: "destructive" });
     } finally {
       setIsSubmitting(false);
-      fetchInitialData(accountingStartDate); // Refresh data
+      fetchInitialData(accountingStartDate); 
     }
   };
 
@@ -209,12 +202,12 @@ export default function OpeningBalancesPage() {
     <>
       <PageTitle title="Opening Balances" subtitle="Set the starting financial figures for your accounting period." icon={ArchiveRestore} />
 
-      <Card className="mb-6 shadow-lg">
+      <Card className="mb-6 shadow-lg m-2">
         <CardHeader>
           <CardTitle className="font-headline">Accounting Start Date</CardTitle>
           <CardDescription className="font-body">Select the date for which these opening balances apply. Typically, the first day of your financial year.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           <Popover>
             <PopoverTrigger asChild>
               <Button
@@ -239,18 +232,18 @@ export default function OpeningBalancesPage() {
       </Card>
 
       {isLoading ? (
-        <div className="flex justify-center items-center h-64">
+        <div className="flex justify-center items-center h-64 m-2">
           <Loader2 className="h-12 w-12 animate-spin text-primary" />
           <p className="ml-4 text-lg font-semibold">Loading Opening Balance Data...</p>
         </div>
       ) : (
       <>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <Card className="shadow-md">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+          <Card className="shadow-md m-2">
             <CardHeader>
               <CardTitle className="font-headline">Cash on Hand</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-1">
               <div>
                 <Label htmlFor="cashOnHandUSD" className="font-body">Cash on Hand (USD)</Label>
                 <Input id="cashOnHandUSD" type="number" value={cashOnHandUSD} onChange={(e) => setCashOnHandUSD(parseFloat(e.target.value) || 0)} placeholder="0.00" disabled={isSubmitting} />
@@ -262,12 +255,12 @@ export default function OpeningBalancesPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-md">
+          <Card className="shadow-md m-2">
             <CardHeader>
               <CardTitle className="font-headline">Other Payables / Accrued Expenses</CardTitle>
               <CardDescription className="font-body">e.g., Unpaid salaries, outstanding utility bills from previous period.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-1">
               <div>
                 <Label htmlFor="otherPayablesUSD" className="font-body">Total Other Payables (USD)</Label>
                 <Input id="otherPayablesUSD" type="number" value={otherPayablesUSD} onChange={(e) => setOtherPayablesUSD(parseFloat(e.target.value) || 0)} placeholder="0.00" disabled={isSubmitting} />
@@ -284,15 +277,15 @@ export default function OpeningBalancesPage() {
           </Card>
         </div>
 
-        <Card className="mb-6 shadow-md">
+        <Card className="mb-2 shadow-md m-2">
           <CardHeader>
             <CardTitle className="font-headline">Bank Account Balances</CardTitle>
              <CardDescription className="font-body">Enter the balance for each bank account as of the accounting start date. Input 0 if no balance.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-1">
             {banks.length === 0 && <p className="font-body text-muted-foreground">No bank accounts found. Please add banks first.</p>}
             {banks.map(bank => (
-              <div key={bank.id} className="p-4 border rounded-md bg-card/50">
+              <div key={bank.id} className="p-4 border rounded-md bg-card/50 space-y-1">
                 <h4 className="font-semibold font-body mb-2">{bank.name} (Primary Currency: {bank.currency})</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -309,15 +302,15 @@ export default function OpeningBalancesPage() {
           </CardContent>
         </Card>
 
-        <Card className="mb-6 shadow-md">
+        <Card className="mb-2 shadow-md m-2">
           <CardHeader>
             <CardTitle className="font-headline">Customer Credits (Accounts Receivable)</CardTitle>
             <CardDescription className="font-body">Total amount owed by each customer as of the accounting start date. Input 0 if none.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-1">
              {customers.length === 0 && <p className="font-body text-muted-foreground">No customers found. Please add customers first.</p>}
             {customers.map(customer => (
-              <div key={customer.id} className="p-4 border rounded-md bg-card/50">
+              <div key={customer.id} className="p-4 border rounded-md bg-card/50 space-y-1">
                 <h4 className="font-semibold font-body mb-2">{customer.name}</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -334,15 +327,15 @@ export default function OpeningBalancesPage() {
           </CardContent>
         </Card>
         
-        <Card className="mb-6 shadow-md">
+        <Card className="mb-2 shadow-md m-2">
           <CardHeader>
             <CardTitle className="font-headline">Vendor Payables (Accounts Payable)</CardTitle>
             <CardDescription className="font-body">Total amount owed to each vendor as of the accounting start date. Input 0 if none.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-1">
             {vendors.length === 0 && <p className="font-body text-muted-foreground">No vendors found. Please add vendors first.</p>}
             {vendors.map(vendor => (
-              <div key={vendor.id} className="p-4 border rounded-md bg-card/50">
+              <div key={vendor.id} className="p-4 border rounded-md bg-card/50 space-y-1">
                 <h4 className="font-semibold font-body mb-2">{vendor.name}</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -361,7 +354,7 @@ export default function OpeningBalancesPage() {
       </>
       )}
 
-      <div className="mt-8 flex justify-end">
+      <div className="mt-8 flex justify-end m-2">
         <Button onClick={handleSaveOpeningBalances} size="lg" disabled={isLoading || isSubmitting}>
           {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
           Save All Opening Balances
@@ -370,4 +363,3 @@ export default function OpeningBalancesPage() {
     </>
   );
 }
-

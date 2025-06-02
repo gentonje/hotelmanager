@@ -12,12 +12,12 @@ export default function BanksLoading() {
         <Skeleton className="h-10 w-56" /> {/* Add New Bank Account Button */}
       </PageTitle>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <Skeleton className="h-6 w-1/2 mb-2" /> {/* CardTitle */}
           <Skeleton className="h-4 w-3/4" /> {/* CardDescription */}
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           <Table>
             <TableHeader>
               <TableRow>

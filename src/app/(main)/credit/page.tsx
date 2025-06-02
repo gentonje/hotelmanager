@@ -383,7 +383,7 @@ export default function CreditPage() {
               {editingSale ? 'Update the details of this credit transaction.' : 'Enter details for a new item/service sold on credit.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <form onSubmit={handleSubmit} className="space-y-1 py-4">
             <div className="grid gap-2">
               <Label htmlFor="customer_name" className="font-body">Customer Name</Label>
               <Input id="customer_name" name="customer_name" value={currentSale.customer_name || ''} onChange={handleInputChange} required disabled={isSubmitting} />
@@ -480,7 +480,7 @@ export default function CreditPage() {
             )}
           </DialogHeader>
           {saleForPayment && (
-            <form onSubmit={handleRecordPayment} className="grid gap-4 py-4">
+            <form onSubmit={handleRecordPayment} className="space-y-1 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="paymentDate" className="font-body">Payment Date</Label>
                 <Popover>
@@ -551,12 +551,12 @@ export default function CreditPage() {
       </Dialog>
 
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <CardTitle className="font-headline">Credit Sales History</CardTitle>
            <CardDescription className="font-body">Log of all credit transactions and their payment status.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           {isLoading ? (
             <div className="flex justify-center items-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />

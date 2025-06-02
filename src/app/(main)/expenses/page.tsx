@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -55,16 +56,17 @@ export interface Expense {
   category: ExpenseCategory;
   description: string;
   amount: number;
-  currency: Currency; // Added
+  currency: Currency; 
   paid_to?: string;
-  vendor_id?: string; // Added
-  is_cash_purchase?: boolean; // Added
-  related_credit_purchase_payment_id?: string; // Added
+  vendor_id?: string; 
+  is_cash_purchase?: boolean; 
+  related_credit_purchase_payment_id?: string; 
   created_at?: string;
   updated_at?: string;
+  vendors?: Pick<Vendor, 'name'>; // For join
 }
 
-interface FormExpense extends Omit<Expense, 'date' | 'currency'> {
+interface FormExpense extends Omit<Expense, 'date' | 'currency' | 'vendors'> {
   date: Date;
   currency: Currency;
 }
@@ -85,20 +87,12 @@ export default function ExpensesPage() {
     try {
         const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('*, vendors (name)') // Join with vendors to get name
+        .select('*, vendors (name)') 
         .order('created_at', { ascending: false });
 
         if (expensesError) throw expensesError;
+        setExpenses(expensesData || []);
         
-        const formattedExpenses = expensesData?.map(exp => ({
-            ...exp,
-            // Supabase returns joined data as an object or array of objects.
-            // If 'vendors' is an object and has a 'name', use it. Otherwise, fallback.
-            paid_to: exp.vendor_id && exp.vendors ? (exp.vendors as unknown as Vendor).name : exp.paid_to,
-        })) || [];
-        setExpenses(formattedExpenses);
-        
-
         const { data: vendorsData, error: vendorsError } = await supabase.from('vendors').select('id, name');
         if (vendorsError) throw vendorsError;
         setVendorsList(vendorsData || []);
@@ -152,17 +146,15 @@ export default function ExpensesPage() {
     }
     setIsSubmitting(true);
 
-    // Explicitly prepare only the fields that exist in the 'expenses' table schema
-    const expenseToSave: Partial<Expense> = {
+    const expenseToSave: Partial<Omit<Expense, 'vendors'>> = {
       date: currentExpense.date!.toISOString(),
       category: currentExpense.category!,
       description: currentExpense.description!,
       amount: currentExpense.amount!,
       currency: currentExpense.currency!,
-      paid_to: currentExpense.paid_to, // This could be a direct name or derived from vendor_id
-      vendor_id: currentExpense.vendor_id || null, // Ensure null if empty
-      is_cash_purchase: currentExpense.is_cash_purchase || false, // Default to false
-      // related_credit_purchase_payment_id is typically set by system, not user form for general expenses
+      paid_to: currentExpense.paid_to, 
+      vendor_id: currentExpense.vendor_id || null, 
+      is_cash_purchase: currentExpense.is_cash_purchase || false, 
     };
     
     let error = null;
@@ -198,7 +190,7 @@ export default function ExpensesPage() {
     setCurrentExpense({
         ...expense,
         date: expense.date ? parseISO(expense.date) : new Date(),
-        currency: expense.currency || 'USD', // Ensure currency is set
+        currency: expense.currency || 'USD', 
     });
     setIsModalOpen(true);
   };
@@ -209,7 +201,7 @@ export default function ExpensesPage() {
   };
   
   const handleDeleteExpense = async (expenseId: string) => {
-    setIsSubmitting(true); // Use a different state if needed for delete operations
+    setIsSubmitting(true); 
     const { error } = await supabase
       .from('expenses')
       .delete()
@@ -221,7 +213,7 @@ export default function ExpensesPage() {
       toast({ title: "Expense deleted successfully", variant: "default" });
       fetchExpensesAndVendors();
     }
-    setIsSubmitting(false); // Reset the state
+    setIsSubmitting(false); 
   };
 
   const filteredExpenses = activeTab === 'All' ? expenses : expenses.filter(exp => exp.category === activeTab);
@@ -244,7 +236,7 @@ export default function ExpensesPage() {
               {editingExpense ? 'Update the details of this expense.' : 'Enter details for a new business expense. For Cash Purchases, use the Transactions page.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <form onSubmit={handleSubmit} className="space-y-1 py-4">
             <div className="grid gap-2">
               <Label htmlFor="date" className="font-body">Date</Label>
               <Popover>
@@ -328,7 +320,7 @@ export default function ExpensesPage() {
         </DialogContent>
       </Dialog>
 
-      <Tabs defaultValue="All" onValueChange={(value) => setActiveTab(value as ExpenseCategory | 'All')} className="w-full">
+      <Tabs defaultValue="All" onValueChange={(value) => setActiveTab(value as ExpenseCategory | 'All')} className="w-full m-2">
         <TabsList className="mb-4 flex-wrap h-auto">
           <TabsTrigger value="All" className="font-body">All Expenses</TabsTrigger>
           {expenseCategoriesSelect.map(cat => (
@@ -336,12 +328,12 @@ export default function ExpensesPage() {
           ))}
         </TabsList>
 
-        <Card className="shadow-lg">
+        <Card className="shadow-lg m-2">
           <CardHeader>
             <CardTitle className="font-headline">{activeTab === 'All' ? 'All Expenses' : `${activeTab} Expenses`}</CardTitle>
             <CardDescription className="font-body">A log of recorded expenses.</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-1">
             {isLoading ? (
               <div className="flex justify-center items-center h-24">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -370,7 +362,7 @@ export default function ExpensesPage() {
                       </TableCell>
                       <TableCell className="font-currency text-sm">{expense.currency}</TableCell>
                       <TableCell className="font-body">
-                        { (expense.vendor_id && vendorsList.find(v => v.id === expense.vendor_id)?.name) || expense.paid_to || 'N/A'}
+                        {expense.vendors?.name || expense.paid_to || 'N/A'}
                       </TableCell>
                       <TableCell className="text-right space-x-1">
                         <Button variant="ghost" size="icon" onClick={() => openEditModal(expense)} title="Edit Expense" disabled={isSubmitting || expense.is_cash_purchase || !!expense.related_credit_purchase_payment_id}>

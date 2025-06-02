@@ -139,7 +139,6 @@ export default function CashSalesHistoryPage() {
       currency: currentSale.currency!,
       customer_name: currentSale.customer_name || null,
       revenue_category: currentSale.revenue_category!,
-      // linked_credit_sale_id is not editable here
     };
 
     const { error } = await supabase
@@ -174,9 +173,6 @@ export default function CashSalesHistoryPage() {
   const handleDeleteSale = async (saleId: string, linkedCreditId?: string | null) => {
     setIsSubmitting(true);
     
-    // Potentially check if there are dependent records, though ON DELETE SET NULL handles DB level.
-    // For this example, we'll proceed with deletion after warning.
-
     const { error } = await supabase
       .from('cash_sales')
       .delete()
@@ -214,7 +210,7 @@ export default function CashSalesHistoryPage() {
             </DialogDescription>
           </DialogHeader>
           {editingSale && (
-            <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+            <form onSubmit={handleSubmit} className="space-y-1 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="edit_cash_date" className="font-body">Date</Label>
                 <Popover>
@@ -292,12 +288,12 @@ export default function CashSalesHistoryPage() {
         </DialogContent>
       </Dialog>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <CardTitle className="font-headline">Cash Sales Log</CardTitle>
            <CardDescription className="font-body">History of all direct cash sales transactions.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           {isLoading ? (
             <div className="flex justify-center items-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -382,4 +378,3 @@ export default function CashSalesHistoryPage() {
     </>
   );
 }
-

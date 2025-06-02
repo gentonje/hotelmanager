@@ -54,8 +54,8 @@ export interface InventoryItem {
   unit: string;
   reorder_level: number;
   supplier?: string;
-  last_restock_date?: string; // Store as ISO string
-  inventory_section: InventorySection; // 'bar', 'rooms', 'halls'
+  last_restock_date?: string; 
+  inventory_section: InventorySection; 
   created_at?: string;
   updated_at?: string;
 }
@@ -144,7 +144,7 @@ export default function InventoryPage() {
     } else {
       const itemWithId = {
         ...itemToSave,
-        id: `${activeSection}_${Date.now()}` // Client-side ID generation
+        id: `${activeSection}_${Date.now()}` 
       };
       const { error: insertError } = await supabase
         .from('inventory_items')
@@ -195,7 +195,6 @@ export default function InventoryPage() {
     setIsSubmitting(false);
   };
   
-  // Placeholder for stock adjustment logic
   const handleStockAdjustment = async (itemId: string, adjustmentType: 'in' | 'out', quantity: number) => {
     if (isNaN(quantity) || quantity <= 0) {
       toast({ title: "Invalid quantity", description: "Please enter a valid positive number for stock adjustment.", variant: "destructive" });
@@ -323,7 +322,7 @@ export default function InventoryPage() {
               {editingItem ? 'Update details for this inventory item.' : `Add a new item to the ${activeSection} inventory.`}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <form onSubmit={handleSubmit} className="space-y-1 py-4">
             <div className="grid gap-2">
               <Label htmlFor="name" className="font-body">Item Name</Label>
               <Input id="name" name="name" value={currentItem.name || ''} onChange={handleInputChange} required disabled={isSubmitting} />
@@ -386,7 +385,7 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
 
-      <Tabs defaultValue="bar" onValueChange={(value) => setActiveSection(value as InventorySection)} className="w-full">
+      <Tabs defaultValue="bar" onValueChange={(value) => setActiveSection(value as InventorySection)} className="w-full m-2">
         <div className="flex justify-between items-center mb-4">
           <TabsList>
             <TabsTrigger value="bar" className="font-body">Bar</TabsTrigger>
@@ -404,36 +403,36 @@ export default function InventoryPage() {
         ) : (
             <>
                 <TabsContent value="bar">
-                <Card className="shadow-lg">
+                <Card className="shadow-lg m-2">
                     <CardHeader>
                     <CardTitle className="font-headline">Bar Inventory</CardTitle>
                     <CardDescription className="font-body">Stock of beverages and other bar supplies.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-1">
                     {renderInventoryTable(filteredItems)}
                     </CardContent>
                 </Card>
                 </TabsContent>
 
                 <TabsContent value="rooms">
-                <Card className="shadow-lg">
+                <Card className="shadow-lg m-2">
                     <CardHeader>
                     <CardTitle className="font-headline">Hotel Room Inventory</CardTitle>
                     <CardDescription className="font-body">Linens, consumables, and other room amenities.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-1">
                     {renderInventoryTable(filteredItems)}
                     </CardContent>
                 </Card>
                 </TabsContent>
 
                 <TabsContent value="halls">
-                <Card className="shadow-lg">
+                <Card className="shadow-lg m-2">
                     <CardHeader>
                     <CardTitle className="font-headline">Training Hall Inventory</CardTitle>
                     <CardDescription className="font-body">Equipment and supplies for training halls.</CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-1">
                     {renderInventoryTable(filteredItems)}
                     </CardContent>
                 </Card>

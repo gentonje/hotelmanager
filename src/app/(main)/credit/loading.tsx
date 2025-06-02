@@ -12,12 +12,12 @@ export default function CreditLoading() {
         <Skeleton className="h-10 w-48" /> {/* Add New Button */}
       </PageTitle>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <Skeleton className="h-6 w-1/3 mb-2" /> {/* CardTitle */}
           <Skeleton className="h-4 w-2/3" /> {/* CardDescription */}
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           <Table>
             <TableHeader>
               <TableRow>

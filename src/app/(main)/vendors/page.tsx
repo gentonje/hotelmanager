@@ -109,7 +109,7 @@ export default function VendorsPage() {
     } else {
       const vendorWithId = {
         ...vendorToSave,
-        id: `vendor_${Date.now()}` // Client-side ID generation
+        id: `vendor_${Date.now()}` 
       };
       const { error: insertError } = await supabase
         .from('vendors')
@@ -171,7 +171,7 @@ export default function VendorsPage() {
               {editingVendor ? 'Update the details of this vendor.' : 'Enter details for a new vendor.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
+          <form onSubmit={handleSubmit} className="space-y-1 py-4">
             <div className="grid gap-2">
               <Label htmlFor="name" className="font-body">Vendor Name</Label>
               <Input id="name" name="name" value={currentVendor.name || ''} onChange={handleInputChange} required disabled={isSubmitting} />
@@ -205,12 +205,12 @@ export default function VendorsPage() {
         </DialogContent>
       </Dialog>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <CardTitle className="font-headline">Vendors List</CardTitle>
            <CardDescription className="font-body">All registered vendors.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           {isLoading ? (
             <div className="flex justify-center items-center h-24">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />

@@ -10,12 +10,12 @@ export default function CashSalesHistoryLoading() {
     <>
       <PageTitle title="Cash Sales History" subtitle="View, edit, or delete recorded cash sales." icon={DollarSign} />
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <Skeleton className="h-6 w-1/3 mb-2" /> {/* CardTitle */}
           <Skeleton className="h-4 w-2/3" /> {/* CardDescription */}
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           <Table>
             <TableHeader>
               <TableRow>

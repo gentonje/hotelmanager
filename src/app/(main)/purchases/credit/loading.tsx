@@ -3,13 +3,13 @@ import { PageTitle } from "@/components/shared/page-title";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Users, PlusCircle } from "lucide-react";
+import { ShoppingCart, PlusCircle } from "lucide-react";
 
-export default function CustomersLoading() {
+export default function CreditPurchasesLoading() {
   return (
     <>
-      <PageTitle title="Customer Management" subtitle="Manage your list of customers and patrons." icon={Users}>
-        <Skeleton className="h-10 w-48" /> {/* Add New Button */}
+      <PageTitle title="Credit Purchases" subtitle="Track and manage items/services purchased on credit from vendors." icon={ShoppingCart}>
+        <Skeleton className="h-10 w-56" /> {/* Add New Button */}
       </PageTitle>
 
       <Card className="shadow-lg m-2">
@@ -21,15 +21,15 @@ export default function CustomersLoading() {
           <Table>
             <TableHeader>
               <TableRow>
-                {[...Array(5)].map((_, i) => (
-                  <TableHead key={i}><Skeleton className="h-5 w-24" /></TableHead>
+                {[...Array(11)].map((_, i) => (
+                  <TableHead key={i}><Skeleton className="h-5 w-20" /></TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {[...Array(5)].map((_, i) => (
                 <TableRow key={i}>
-                  {[...Array(5)].map((_, j) => (
+                  {[...Array(11)].map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
                   ))}
                 </TableRow>

@@ -176,13 +176,11 @@ export default function DashboardPage() {
 
       if (openingBalancesError) {
         console.error("Error fetching opening cash balances:", openingBalancesError.message);
-        // Display a more specific toast for this failure
         toast({
           title: "Data Fetch Error: Opening Balances",
           description: `Could not fetch opening cash balances. The dashboard might show $0 for these values. Details: ${openingBalancesError.message}`,
           variant: "destructive",
         });
-        // The function will proceed with 0 for opening balances due to the fallback below
       }
       const fetchedOpeningCashUSD = openingBalancesData?.find(b => b.currency === 'USD')?.amount || 0;
       const fetchedOpeningCashSSP = openingBalancesData?.find(b => b.currency === 'SSP')?.amount || 0;
@@ -254,7 +252,7 @@ export default function DashboardPage() {
 
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
-        .select('amount, currency') // Ensure currency is selected
+        .select('amount, currency') 
         .gte('date', startDateISO)
         .lte('date', endDateISO);
       if (expensesError) throw expensesError;
@@ -273,7 +271,6 @@ export default function DashboardPage() {
       const distinctDebtors = new Set(overallCreditData?.filter(c => c.balance_due > 0).map(c => c.customer_name));
       const activeDebtorsCount = distinctDebtors.size;
 
-      // Fetch overall credit purchases owed (Accounts Payable)
       const { data: overallCreditPurchasesData, error: overallCreditPurchasesError } = await supabase
         .from('credit_purchases')
         .select('balance_due, currency, vendor_id, vendors (name)')
@@ -322,7 +319,7 @@ export default function DashboardPage() {
         description: `An unexpected error occurred: ${error.message}. Some data may be missing or incorrect. Please check your network or try refreshing.`,
         variant: "destructive",
       });
-      if (isInitialLoad) setStats(initialStats); // Reset to initial if full load fails
+      if (isInitialLoad) setStats(initialStats); 
     } finally {
       if (isLoading && isInitialLoad) {
         setIsLoading(false);
@@ -344,16 +341,16 @@ export default function DashboardPage() {
     : 'No outstanding customer credit (Overall)';
 
   const activeCreditorsMessage = stats.activeCreditorsCount > 0
-    ? `${stats.activeCreditorsCount} Active Creditor${stats.activeCreditorsCount > 1 ? 's' : ''} (Overall)`
+    ? `${stats.activeCreditorsCount > 1 ? 's' : ''} Active Creditor${stats.activeCreditorsCount > 1 ? 's' : ''} (Overall)`
     : 'No outstanding vendor credit (Overall)';
 
   const totalCategorizedRevenueUSD = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.usd, 0);
   const totalCategorizedRevenueSSP = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.ssp, 0);
 
 
-  if (isLoading && stats === initialStats) { // Only show full page loader on very first load
+  if (isLoading && stats === initialStats) { 
     return (
-      <div className="flex justify-center items-center h-64">
+      <div className="flex justify-center items-center h-64 m-2">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
         <p className="ml-4 text-lg font-semibold font-body">Loading Dashboard Data...</p>
       </div>
@@ -405,7 +402,7 @@ export default function DashboardPage() {
           }
           icon={DollarSign}
           description={`Direct cash income ${periodDescription}`}
-          className="bg-gradient-to-r from-teal-500/10 to-teal-600/10 border-teal-500"
+          className="bg-gradient-to-r from-teal-500/10 to-teal-600/10 border-teal-500 m-2"
         />
         <StatCard
           title="Credit Sales Originated"
@@ -417,7 +414,7 @@ export default function DashboardPage() {
           }
           icon={FileText}
           description={`Value of new credit issued ${periodDescription}`}
-          className="bg-gradient-to-r from-green-500/10 to-green-600/10 border-green-500"
+          className="bg-gradient-to-r from-green-500/10 to-green-600/10 border-green-500 m-2"
         />
         <StatCard
           title="Bank Deposits Value"
@@ -429,7 +426,7 @@ export default function DashboardPage() {
           }
           icon={Landmark}
           description={`Total bank deposits ${periodDescription}`}
-          className="bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500"
+          className="bg-gradient-to-r from-blue-500/10 to-blue-600/10 border-blue-500 m-2"
         />
         <StatCard
           title="Expenses Value"
@@ -441,7 +438,7 @@ export default function DashboardPage() {
           }
           icon={TrendingDown}
           description={`Total expenses ${periodDescription}`}
-           className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500"
+           className="bg-gradient-to-r from-orange-500/10 to-orange-600/10 border-orange-500 m-2"
         />
         <StatCard
           title="Outstanding Customer Credit"
@@ -453,7 +450,7 @@ export default function DashboardPage() {
           }
           icon={Users}
           description={activeDebtorsMessage}
-           className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500"
+           className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/10 border-yellow-500 m-2"
         />
          <StatCard
           title="Cash At Hand (Current)"
@@ -465,7 +462,7 @@ export default function DashboardPage() {
           }
           icon={HandCoins}
           description={`Est. based on start-of-year opening balance & selected period's net cash movement.`}
-           className="bg-gradient-to-r from-sky-500/10 to-sky-600/10 border-sky-500"
+           className="bg-gradient-to-r from-sky-500/10 to-sky-600/10 border-sky-500 m-2"
         />
          <StatCard
           title="Cash Owed to Creditors (A/P)"
@@ -477,17 +474,17 @@ export default function DashboardPage() {
           }
           icon={ShoppingCart}
           description={activeCreditorsMessage}
-           className="bg-gradient-to-r from-red-500/10 to-red-600/10 border-red-500"
+           className="bg-gradient-to-r from-red-500/10 to-red-600/10 border-red-500 m-2"
         />
       </div>
 
       <div className="grid gap-6 grid-cols-1">
-        <Card className="shadow-lg">
+        <Card className="shadow-lg m-2">
           <CardHeader>
             <CardTitle className="font-headline">Revenue Breakdown ({periodDescription.replace('for ', '')})</CardTitle>
             <CardDescription className="font-body">Performance of revenue streams {periodDescription}. Displays both USD and SSP.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-1">
             {revenueCategoriesDisplay.map(category => (
               <div key={category.name}>
                 <div className="mb-1 flex justify-between items-center">
@@ -521,12 +518,12 @@ export default function DashboardPage() {
           </CardFooter>
         </Card>
 
-        <Card className="shadow-lg">
+        <Card className="shadow-lg m-2">
           <CardHeader>
             <CardTitle className="font-headline">Quick Actions (Placeholder)</CardTitle>
              <CardDescription className="font-body">Common tasks at your fingertips.</CardDescription>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-1 space-y-1">
             <Button variant="default" size="lg" disabled>Add New Reservation</Button>
             <Button variant="outline" size="lg" disabled>Record Expense</Button>
             <Button variant="outline" size="lg" disabled>Update Inventory</Button>

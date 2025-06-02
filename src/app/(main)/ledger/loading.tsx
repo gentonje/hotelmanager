@@ -10,11 +10,11 @@ export default function LedgerLoading() {
     <>
       <PageTitle title="General Ledger" subtitle="A chronological record of all financial transactions." icon={BookText} />
 
-      <Card className="shadow-lg mb-6">
+      <Card className="shadow-lg mb-6 m-2">
         <CardHeader>
           <CardTitle className="font-headline">Filters</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col sm:flex-row gap-4 items-center">
+        <CardContent className="flex flex-col sm:flex-row gap-1 items-center space-y-1 sm:space-y-0 sm:space-x-1">
           <div className="grid gap-2 w-full sm:w-auto">
             <Skeleton className="h-4 w-20 mb-1" /> {/* Label */}
             <Skeleton className="h-10 w-full sm:w-[240px]" /> {/* Popover Trigger */}
@@ -30,12 +30,12 @@ export default function LedgerLoading() {
         </CardContent>
       </Card>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg m-2">
         <CardHeader>
           <Skeleton className="h-6 w-1/2 mb-2" /> {/* CardTitle */}
           <Skeleton className="h-4 w-3/4" /> {/* CardDescription */}
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-1">
           <Table>
             <TableHeader>
               <TableRow>

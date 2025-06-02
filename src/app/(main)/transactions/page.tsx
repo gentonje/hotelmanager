@@ -69,7 +69,6 @@ export interface CashSale {
   linked_credit_sale_id?: string | null;
 }
 
-// Purchase Specific Interfaces
 interface CreditPurchase {
   id: string;
   vendor_id?: string;
@@ -79,14 +78,13 @@ interface CreditPurchase {
   paid_amount: number;
   balance_due: number;
   currency: Currency;
-  date_of_purchase: string; // ISO string
-  due_date?: string; // ISO string
+  date_of_purchase: string; 
+  due_date?: string; 
   status: CreditStatus;
   expense_category?: ExistingExpenseCategory;
 }
 
 
-// Form states
 interface FormCashSale extends Omit<CashSale, 'id' | 'date' | 'currency' | 'linked_credit_sale_id'> {
   date: Date;
   currency: Currency;
@@ -139,12 +137,10 @@ export default function TransactionsPage() {
   const [vendorsList, setVendorsList] = useState<Pick<Vendor, 'id' | 'name'>[]>([]);
 
 
-  // Sales Form states
   const [cashSaleData, setCashSaleData] = useState<Partial<FormCashSale>>({ date: new Date(), amount: 0, currency: 'USD' });
   const [creditSaleData, setCreditSaleData] = useState<Partial<FormCreditSaleState>>({ date: new Date(), status: 'Pending', original_amount: 0, currency: 'USD' });
   const [depositData, setDepositData] = useState<Partial<FormDepositState>>({ date: new Date(), currency: 'USD', amount: 0 });
 
-  // Purchase Form states
   const [cashPurchaseData, setCashPurchaseData] = useState<Partial<FormCashPurchaseState>>({ date: new Date(), amount: 0, currency: 'USD' });
   const [creditPurchaseData, setCreditPurchaseData] = useState<Partial<FormCreditPurchaseState>>({ date_of_purchase: new Date(), original_amount: 0, currency: 'USD', status: 'Pending' });
   
@@ -174,7 +170,7 @@ export default function TransactionsPage() {
   }, []);
 
  useEffect(() => {
-    const newName = searchParams.get('newEntityName'); // Generic name
+    const newName = searchParams.get('newEntityName'); 
     const entityOrigin = searchParams.get('newEntityOrigin'); 
 
     if (newName && (customersList.length > 0 || vendorsList.length > 0)) {
@@ -315,7 +311,7 @@ export default function TransactionsPage() {
               setIsSubmitting(false); return; 
             }
             
-            finalCashRecordToSave.id = `cash_ps_${Date.now()}`; // Use a different prefix for partial cash sales
+            finalCashRecordToSave.id = `cash_ps_${Date.now()}`; 
             finalCashRecordToSave.linked_credit_sale_id = creditSaleId;
             successMessage = `Partial Cash Payment Recorded. Credit Sale Created for Balance of ${creditToSave.currency} ${shortfallAmount.toFixed(2)}.`;
 
@@ -372,7 +368,7 @@ export default function TransactionsPage() {
                  toast({title: "Missing Fields", description: "Date, Vendor, Item/Service, Amount, Currency, Status, and Expense Category are required for credit purchase.", variant: "destructive"});
                 setIsSubmitting(false); return;
             }
-            const purchaseToSave : Omit<CreditPurchase, 'id' | 'created_at' | 'updated_at' | 'paid_amount' | 'balance_due'> & {paid_amount: number, balance_due: number} = {
+            const purchaseToSave : Omit<CreditPurchase, 'id' | 'created_at' | 'updated_at' | 'paid_amount' | 'balance_due' | 'vendors'> & {paid_amount: number, balance_due: number} = {
                 date_of_purchase: creditPurchaseData.date_of_purchase.toISOString(),
                 vendor_id: creditPurchaseData.vendor_id!,
                 item_service_purchased: creditPurchaseData.item_service_purchased!,
@@ -408,7 +404,7 @@ export default function TransactionsPage() {
     switch (selectedSalesType) {
       case 'cash_sale':
         return (
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="grid gap-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-1">
             <div className="grid gap-2">
               <Label htmlFor="cash_date">Date</Label>
               <Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !cashSaleData.date && "text-muted-foreground")} disabled={isSubmitting}><CalendarIcon className="mr-2 h-4 w-4" />{cashSaleData.date ? format(cashSaleData.date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={cashSaleData.date} onSelect={(d) => handleDateChange('cash_sale', 'date', d)} initialFocus /></PopoverContent></Popover>
@@ -425,31 +421,31 @@ export default function TransactionsPage() {
             {!isShortfall && (<div className="grid gap-2"><div className="flex items-center justify-between"><Label htmlFor="cash_customer_name_optional" className="font-body">Customer Name (Optional)</Label><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-primary hover:text-primary/80" onClick={() => router.push(`/customers?redirect=${pathname}&newEntityName&newEntityOrigin=transactionShortfall`)} disabled={isSubmitting || isLoading} title="Add New Customer"><PlusCircle className="h-5 w-5" /></Button></div><Select value={cashSaleData.customer_name || '_SELECT_CUST_OPT_'} onValueChange={(value) => handleSelectChange('cash_sale', 'customer_name', value)} disabled={isSubmitting || isLoading}><SelectTrigger id="cash_customer_name_optional"><SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer (Optional)"} /></SelectTrigger><SelectContent>{isLoading && <SelectItem value="_LOADING_CUST_OPT_" disabled>Loading customers...</SelectItem>}{!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_OPT_" disabled>No customers found</SelectItem>}<SelectItem value="_SELECT_CUST_OPT_">None (Optional)</SelectItem>{customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}</SelectContent></Select></div>)}
             {changeDue !== null && changeDue >= 0 && !isShortfall && (<p className="text-sm font-medium text-green-600 font-body">Change Due: {cashSaleData.currency} {(changeDue).toFixed(2)}</p>)}
             {changeDue !== null && changeDue < 0 && !isShortfall && (<p className="text-sm font-medium text-destructive font-body">Amount Tendered is less than Sale Amount. Select customer and set due date to record balance.</p>)}
-            <Button type="submit" disabled={isSubmitting || isLoading} className="w-full">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {isShortfall ? "Record Partial Payment & Credit Balance" : "Record Cash Sale"}</Button>
+            <Button type="submit" disabled={isSubmitting || isLoading} className="w-full mt-4">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {isShortfall ? "Record Partial Payment & Credit Balance" : "Record Cash Sale"}</Button>
           </form>
         );
       case 'credit_sale':
         return (
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="grid gap-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-1">
              <div className="grid gap-2"><div className="flex items-center justify-between"><Label htmlFor="credit_customer_name" className="font-body">Customer Name</Label><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-primary hover:text-primary/80" onClick={() => router.push(`/customers?redirect=${pathname}&newEntityName&newEntityOrigin=transactionCreditSale`)} disabled={isSubmitting || isLoading} title="Add New Customer"><PlusCircle className="h-5 w-5" /></Button></div><Select value={creditSaleData.customer_name || '_SELECT_CUST_CREDIT_'} onValueChange={(value) => handleSelectChange('credit_sale', 'customer_name', value)} disabled={isSubmitting || isLoading}><SelectTrigger id="credit_customer_name"><SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} /></SelectTrigger><SelectContent>{isLoading && <SelectItem value="_LOADING_CUST_CREDIT_" disabled>Loading customers...</SelectItem>}{!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_CREDIT_" disabled>No customers found</SelectItem>}<SelectItem value="_SELECT_CUST_CREDIT_" disabled>Select customer</SelectItem>{customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}</SelectContent></Select></div>
             <div className="grid gap-2"><Label htmlFor="credit_revenue_category" className="font-body">Revenue Category</Label><Select value={creditSaleData.revenue_category || ''} onValueChange={(value) => handleSelectChange('credit_sale', 'revenue_category', value)} disabled={isSubmitting}><SelectTrigger id="credit_revenue_category"><SelectValue placeholder="Select revenue category" /></SelectTrigger><SelectContent>{revenueCategories.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select></div>
             <div className="grid gap-2"><Label htmlFor="credit_item_service" className="font-body">Item/Service Sold</Label><Input id="credit_item_service" name="item_service" value={creditSaleData.item_service || ''} onChange={(e) => handleInputChange('credit_sale', e)} required disabled={isSubmitting}/></div>
             <div className="grid gap-2"><Label htmlFor="credit_details" className="font-body">Details (Optional)</Label><Textarea id="credit_details" name="details" value={creditSaleData.details || ''} onChange={(e) => handleInputChange('credit_sale', e)} disabled={isSubmitting}/></div>
             <div className="grid grid-cols-3 gap-4"> <div className="grid gap-2"><Label htmlFor="credit_original_amount" className="font-body">Amount</Label><Input id="credit_original_amount" name="original_amount" type="number" value={creditSaleData.original_amount || ''} onChange={(e) => handleInputChange('credit_sale', e)} required disabled={isSubmitting} step="0.01"/></div><div className="grid gap-2"><Label htmlFor="credit_currency" className="font-body">Currency</Label><Select value={creditSaleData.currency || 'USD'} onValueChange={(value) => handleSelectChange('credit_sale', 'currency', value as Currency)} disabled={isSubmitting}><SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger><SelectContent><SelectItem value="USD">USD</SelectItem><SelectItem value="SSP">SSP</SelectItem></SelectContent></Select></div><div className="grid gap-2"><Label htmlFor="credit_status" className="font-body">Status</Label><Select value={creditSaleData.status || 'Pending'} onValueChange={(value) => handleSelectChange('credit_sale', 'status', value as CreditStatus)} disabled={isSubmitting}><SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger><SelectContent><SelectItem value="Pending">Pending</SelectItem><SelectItem value="Paid" disabled>Paid (Set via Payment)</SelectItem><SelectItem value="Overdue">Overdue</SelectItem></SelectContent></Select></div></div>
             <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label htmlFor="credit_date" className="font-body">Transaction Date</Label><Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !creditSaleData.date && "text-muted-foreground")} disabled={isSubmitting}><CalendarIcon className="mr-2 h-4 w-4" />{creditSaleData.date ? format(creditSaleData.date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={creditSaleData.date} onSelect={(d) => handleDateChange('credit_sale','date',d)} initialFocus /></PopoverContent></Popover></div><div className="grid gap-2"><Label htmlFor="credit_due_date" className="font-body">Due Date (Optional)</Label><Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !creditSaleData.due_date && "text-muted-foreground")} disabled={isSubmitting}><CalendarIcon className="mr-2 h-4 w-4" />{creditSaleData.due_date ? format(creditSaleData.due_date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={creditSaleData.due_date} onSelect={(d) => handleDateChange('credit_sale','due_date',d)} /></PopoverContent></Popover></div></div>
-            <Button type="submit" disabled={isSubmitting || isLoading} className="w-full">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record Credit Sale</Button>
+            <Button type="submit" disabled={isSubmitting || isLoading} className="w-full mt-4">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record Credit Sale</Button>
           </form>
         );
       case 'deposit':
         return (
-          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="grid gap-4">
+          <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-1">
             <div className="grid gap-2"><Label htmlFor="deposit_date" className="font-body">Date</Label><Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !depositData.date && "text-muted-foreground")} disabled={isSubmitting}><CalendarIcon className="mr-2 h-4 w-4" />{depositData.date ? format(depositData.date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={depositData.date} onSelect={(d) => handleDateChange('deposit','date',d)} initialFocus /></PopoverContent></Popover></div>
             <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label htmlFor="deposit_amount" className="font-body">Amount</Label><Input id="deposit_amount" name="amount" type="number" value={depositData.amount || ''} onChange={(e) => handleInputChange('deposit', e)} required disabled={isSubmitting} step="0.01"/></div><div className="grid gap-2"><Label htmlFor="deposit_currency" className="font-body">Currency</Label><Select value={depositData.currency || 'USD'} onValueChange={(value) => handleSelectChange('deposit', 'currency', value as Currency)} disabled={isSubmitting}><SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger><SelectContent><SelectItem value="USD">USD</SelectItem><SelectItem value="SSP">SSP</SelectItem></SelectContent></Select></div></div>
             <div className="grid gap-2"><Label htmlFor="deposit_bank" className="font-body">Bank</Label><Select value={depositData.bank || '_SELECT_BANK_'} onValueChange={(value) => handleSelectChange('deposit', 'bank', value)} disabled={isSubmitting || isLoading}><SelectTrigger><SelectValue placeholder={isLoading ? "Loading banks..." : "Select bank"} /></SelectTrigger><SelectContent>{isLoading && <SelectItem value="_LOADING_BANKS_" disabled>Loading banks...</SelectItem>}{!isLoading && banksList.length === 0 && <SelectItem value="_EMPTY_BANKS_" disabled>No banks available</SelectItem>}<SelectItem value="_SELECT_BANK_" disabled>Select bank</SelectItem>{banksList.map(bank => <SelectItem key={bank.id} value={bank.name}>{bank.name} ({bank.currency})</SelectItem>)}</SelectContent></Select></div>
              <div className="grid gap-2"><Label htmlFor="deposit_reference_no" className="font-body">Reference No.</Label><Input id="deposit_reference_no" name="reference_no" value={depositData.reference_no || ''} onChange={(e) => handleInputChange('deposit', e)} required disabled={isSubmitting}/></div>
             <div className="grid gap-2"><div className="flex items-center justify-between"><Label htmlFor="deposit_deposited_by" className="font-body">Deposited By (Customer)</Label><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-primary hover:text-primary/80" onClick={() => router.push(`/customers?redirect=${pathname}&newEntityName&newEntityOrigin=transactionDeposit`)} disabled={isSubmitting || isLoading} title="Add New Customer"><PlusCircle className="h-5 w-5" /></Button></div><Select value={depositData.deposited_by || '_SELECT_CUST_DEP_'} onValueChange={(value) => handleSelectChange('deposit', 'deposited_by', value)} disabled={isSubmitting || isLoading}><SelectTrigger><SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer"} /></SelectTrigger><SelectContent>{isLoading && <SelectItem value="_LOADING_CUST_DEP_" disabled>Loading customers...</SelectItem>}{!isLoading && customersList.length === 0 && <SelectItem value="_EMPTY_CUST_DEP_" disabled>No customers found</SelectItem>}<SelectItem value="_SELECT_CUST_DEP_" disabled>Select customer</SelectItem>{customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}</SelectContent></Select></div>
             <div className="grid gap-2"><Label htmlFor="deposit_description" className="font-body">Description (Optional)</Label><Textarea id="deposit_description" name="description" value={depositData.description || ''} onChange={(e) => handleInputChange('deposit', e)} disabled={isSubmitting}/></div>
-            <Button type="submit" disabled={isSubmitting || isLoading} className="w-full">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record Deposit</Button>
+            <Button type="submit" disabled={isSubmitting || isLoading} className="w-full mt-4">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record Deposit</Button>
           </form>
         );
       default:
@@ -461,7 +457,7 @@ export default function TransactionsPage() {
     switch(selectedPurchaseType) {
         case 'cash_purchase':
             return (
-                <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="grid gap-4">
+                <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-1">
                     <div className="grid gap-2">
                         <Label htmlFor="cp_date" className="font-body">Date</Label>
                         <Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !cashPurchaseData.date && "text-muted-foreground")} disabled={isSubmitting}><CalendarIcon className="mr-2 h-4 w-4" />{cashPurchaseData.date ? format(cashPurchaseData.date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={cashPurchaseData.date} onSelect={(d) => handleDateChange('cash_purchase', 'date', d)} initialFocus /></PopoverContent></Popover>
@@ -474,12 +470,12 @@ export default function TransactionsPage() {
                         <div className="grid gap-2"><Label htmlFor="cp_currency" className="font-body">Currency</Label><Select value={cashPurchaseData.currency || 'USD'} onValueChange={(value) => handleSelectChange('cash_purchase', 'currency', value as Currency)} disabled={isSubmitting}><SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger><SelectContent><SelectItem value="USD">USD</SelectItem><SelectItem value="SSP">SSP</SelectItem></SelectContent></Select></div>
                     </div>
                     <div className="grid gap-2"><div className="flex items-center justify-between"><Label htmlFor="cp_vendor" className="font-body">Vendor (Optional)</Label><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-primary hover:text-primary/80" onClick={() => router.push(`/vendors?redirect=${pathname}&newEntityName&newEntityOrigin=transactionCashPurchaseVendor`)} disabled={isSubmitting || isLoading} title="Add New Vendor"><PlusCircle className="h-5 w-5" /></Button></div><Select value={vendorsList.find(v=>v.id === cashPurchaseData.vendor_id)?.name || '_SELECT_VENDOR_CP_OPT_'} onValueChange={(value) => handleSelectChange('cash_purchase', 'vendor_id', value)} disabled={isSubmitting || isLoading}><SelectTrigger id="cp_vendor"><SelectValue placeholder={isLoading ? "Loading vendors..." : "Select vendor (Optional)"} /></SelectTrigger><SelectContent>{isLoading && <SelectItem value="_LOADING_VENDOR_CP_OPT_" disabled>Loading vendors...</SelectItem>}{!isLoading && vendorsList.length === 0 && <SelectItem value="_EMPTY_VENDOR_CP_OPT_" disabled>No vendors found</SelectItem>}<SelectItem value="_SELECT_VENDOR_CP_OPT_">None (Optional)</SelectItem>{vendorsList.map(vendor => <SelectItem key={vendor.id} value={vendor.name}>{vendor.name}</SelectItem>)}</SelectContent></Select></div>
-                    <Button type="submit" disabled={isSubmitting || isLoading} className="w-full">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record Cash Purchase</Button>
+                    <Button type="submit" disabled={isSubmitting || isLoading} className="w-full mt-4">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record Cash Purchase</Button>
                 </form>
             );
         case 'credit_purchase':
             return (
-                 <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="grid gap-4">
+                 <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="space-y-1">
                     <div className="grid gap-2"><div className="flex items-center justify-between"><Label htmlFor="crp_vendor" className="font-body">Vendor</Label><Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-primary hover:text-primary/80" onClick={() => router.push(`/vendors?redirect=${pathname}&newEntityName&newEntityOrigin=transactionCreditPurchaseVendor`)} disabled={isSubmitting || isLoading} title="Add New Vendor"><PlusCircle className="h-5 w-5" /></Button></div><Select value={vendorsList.find(v=>v.id === creditPurchaseData.vendor_id)?.name || '_SELECT_VENDOR_CRP_'} onValueChange={(value) => handleSelectChange('credit_purchase', 'vendor_id', value)} disabled={isSubmitting || isLoading} required><SelectTrigger id="crp_vendor"><SelectValue placeholder={isLoading ? "Loading vendors..." : "Select vendor"} /></SelectTrigger><SelectContent>{isLoading && <SelectItem value="_LOADING_VENDOR_CRP_" disabled>Loading vendors...</SelectItem>}{!isLoading && vendorsList.length === 0 && <SelectItem value="_EMPTY_VENDOR_CRP_" disabled>No vendors found</SelectItem>}<SelectItem value="_SELECT_VENDOR_CRP_" disabled>Select vendor</SelectItem>{vendorsList.map(vendor => <SelectItem key={vendor.id} value={vendor.name}>{vendor.name}</SelectItem>)}</SelectContent></Select></div>
                     <div className="grid gap-2"><Label htmlFor="crp_expense_category" className="font-body">Expense Category</Label><Select value={creditPurchaseData.expense_category || ''} onValueChange={(value) => handleSelectChange('credit_purchase', 'expense_category', value)} disabled={isSubmitting}><SelectTrigger id="crp_expense_category"><SelectValue placeholder="Select expense category" /></SelectTrigger><SelectContent>{expenseCategoriesList.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent></Select></div>
                     <div className="grid gap-2"><Label htmlFor="crp_item_service" className="font-body">Item/Service Purchased</Label><Input id="crp_item_service" name="item_service_purchased" value={creditPurchaseData.item_service_purchased || ''} onChange={(e) => handleInputChange('credit_purchase', e)} required disabled={isSubmitting}/></div>
@@ -492,7 +488,7 @@ export default function TransactionsPage() {
                         <div className="grid gap-2"><Label htmlFor="crp_date_of_purchase" className="font-body">Purchase Date</Label><Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !creditPurchaseData.date_of_purchase && "text-muted-foreground")} disabled={isSubmitting}><CalendarIcon className="mr-2 h-4 w-4" />{creditPurchaseData.date_of_purchase ? format(creditPurchaseData.date_of_purchase, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={creditPurchaseData.date_of_purchase} onSelect={(d) => handleDateChange('credit_purchase','date_of_purchase',d)} initialFocus /></PopoverContent></Popover></div>
                         <div className="grid gap-2"><Label htmlFor="crp_due_date" className="font-body">Due Date (Optional)</Label><Popover><PopoverTrigger asChild><Button variant={"outline"} className={cn("w-full justify-start text-left font-normal font-sans", !creditPurchaseData.due_date && "text-muted-foreground")} disabled={isSubmitting}><CalendarIcon className="mr-2 h-4 w-4" />{creditPurchaseData.due_date ? format(creditPurchaseData.due_date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={creditPurchaseData.due_date} onSelect={(d) => handleDateChange('credit_purchase','due_date',d)} /></PopoverContent></Popover></div>
                     </div>
-                    <Button type="submit" disabled={isSubmitting || isLoading} className="w-full">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record Credit Purchase</Button>
+                    <Button type="submit" disabled={isSubmitting || isLoading} className="w-full mt-4">{isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record Credit Purchase</Button>
                 </form>
             );
         default:
@@ -504,13 +500,13 @@ export default function TransactionsPage() {
   return (
     <>
       <PageTitle title="Record Transaction" subtitle="Log sales, deposits, or purchases." icon={ListChecks} />
-      <Card className="shadow-xl max-w-2xl mx-auto">
+      <Card className="shadow-xl max-w-2xl mx-auto m-2">
         <CardHeader>
           <CardTitle className="font-headline text-2xl">New Transaction</CardTitle>
           <CardDescription className="font-body">Select the type of transaction and fill in the details below.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="grid gap-6">
+        <CardContent className="space-y-1">
+          <div className="space-y-1">
             <div className="grid gap-2">
               <Label htmlFor="transaction_focus" className="font-body text-base">Transaction Focus</Label>
               <Select onValueChange={handleFocusChange} value={selectedFocus}>
