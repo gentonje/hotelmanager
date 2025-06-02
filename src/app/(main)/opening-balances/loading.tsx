@@ -9,7 +9,7 @@ export default function OpeningBalancesLoading() {
     <>
       <PageTitle title="Opening Balances" subtitle="Set the starting financial figures for your accounting period." icon={ArchiveRestore} />
 
-      <Card className="mb-6 shadow-lg">
+      <Card className="mb-1 sm:mb-6 shadow-lg"> {/* Adjusted margin */}
         <CardHeader>
           <CardTitle className="font-headline">Accounting Start Date</CardTitle>
           <CardDescription className="font-body">Select the date for which these opening balances apply...</CardDescription>
@@ -19,8 +19,8 @@ export default function OpeningBalancesLoading() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {[...Array(2)].map((_, i) => ( // Use index `i` for the key
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-1 sm:mb-6"> {/* Adjusted margin */}
+        {[...Array(2)].map((_, i) => ( 
           <Card key={`major-cat-${i}`} className="shadow-md">
             <CardHeader>
               <Skeleton className="h-6 w-1/2 mb-2" /> {/* CardTitle */}
@@ -46,14 +46,14 @@ export default function OpeningBalancesLoading() {
         ))}
       </div>
 
-      {[...Array(3)].map((_, outerIndex) => ( // outerIndex will be 0, 1, 2
-        <Card key={`list-cat-${outerIndex}`} className="mb-6 shadow-md">
+      {[...Array(3)].map((_, outerIndex) => ( 
+        <Card key={`list-cat-${outerIndex}`} className="mb-1 sm:mb-6 shadow-md"> {/* Adjusted margin */}
           <CardHeader>
             <Skeleton className="h-6 w-1/3 mb-2" /> {/* CardTitle */}
             <Skeleton className="h-4 w-2/3 mb-1" /> {/* CardDescription */}
           </CardHeader>
           <CardContent className="space-y-6">
-            {[...Array(2)].map((_, itemIndex) => ( // itemIndex will be 0, 1
+            {[...Array(2)].map((_, itemIndex) => ( 
               <div key={`item-${outerIndex}-${itemIndex}`} className="p-4 border rounded-md bg-card/50">
                 <Skeleton className="h-5 w-1/4 mb-2" /> {/* Item Title (Bank/Customer/Vendor Name) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -79,3 +79,4 @@ export default function OpeningBalancesLoading() {
     </>
   );
 }
+
