@@ -176,6 +176,13 @@ export default function DashboardPage() {
 
       if (openingBalancesError) {
         console.error("Error fetching opening cash balances:", openingBalancesError.message);
+        // Display a more specific toast for this failure
+        toast({
+          title: "Data Fetch Error: Opening Balances",
+          description: `Could not fetch opening cash balances. The dashboard might show $0 for these values. Details: ${openingBalancesError.message}`,
+          variant: "destructive",
+        });
+        // The function will proceed with 0 for opening balances due to the fallback below
       }
       const fetchedOpeningCashUSD = openingBalancesData?.find(b => b.currency === 'USD')?.amount || 0;
       const fetchedOpeningCashSSP = openingBalancesData?.find(b => b.currency === 'SSP')?.amount || 0;
@@ -312,10 +319,10 @@ export default function DashboardPage() {
     } catch (error: any) {
       toast({
         title: "Error fetching dashboard data",
-        description: error.message,
+        description: `An unexpected error occurred: ${error.message}. Some data may be missing or incorrect. Please check your network or try refreshing.`,
         variant: "destructive",
       });
-      if (isInitialLoad) setStats(initialStats);
+      if (isInitialLoad) setStats(initialStats); // Reset to initial if full load fails
     } finally {
       if (isLoading && isInitialLoad) {
         setIsLoading(false);
@@ -342,10 +349,9 @@ export default function DashboardPage() {
 
   const totalCategorizedRevenueUSD = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.usd, 0);
   const totalCategorizedRevenueSSP = Object.values(stats.revenueByCategory).reduce((sum, catVal) => sum + catVal.ssp, 0);
-  const totalCategorizedRevenueOverall = totalCategorizedRevenueUSD + totalCategorizedRevenueSSP;
 
 
-  if (isLoading && stats === initialStats) {
+  if (isLoading && stats === initialStats) { // Only show full page loader on very first load
     return (
       <div className="flex justify-center items-center h-64">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -495,13 +501,16 @@ export default function DashboardPage() {
                   </span>
                 </div>
                 <Progress
-                  value={totalCategorizedRevenueUSD > 0 ? (category.values.usd / totalCategorizedRevenueUSD) * 100 : 0}
-                  aria-label={`${category.name} USD revenue progress`}
+                  value={totalCategorizedRevenueUSD > 0 || totalCategorizedRevenueSSP > 0 ? 
+                    ((category.values.usd + category.values.ssp) / (totalCategorizedRevenueUSD + totalCategorizedRevenueSSP)) * 100 
+                    : 0
+                  }
+                  aria-label={`${category.name} revenue progress`}
                   className={category.colorClass}
                 />
               </div>
             ))}
-             {totalCategorizedRevenueOverall === 0 && (
+             {(totalCategorizedRevenueUSD + totalCategorizedRevenueSSP) === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4 font-body">No categorized revenue recorded for this period.</p>
             )}
           </CardContent>
@@ -528,5 +537,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
-    
