@@ -44,14 +44,13 @@ interface NavItemGroup {
   label: string;
   isGroup: true;
   items: NavSubItem[];
-  // Group itself doesn't have a top-level 'icon', it's derived or a default can be set
 }
 
 interface NavItemSingle {
   href: string;
   label: string;
   icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
-  isGroup?: false; // Explicitly not a group
+  isGroup?: false;
 }
 
 type NavItemType = NavItemGroup | NavItemSingle;
@@ -83,14 +82,11 @@ const navItems: NavItemType[] = [
   },
   { href: "/vendors", label: "Vendors", icon: Truck },
   { href: "/customers", label: "Customers", icon: Users },
-  // Future sections
-  // { href: "/reports", label: "Reports", icon: BarChart3 },
-  // { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const { openMobile, setOpenMobile } = useSidebar();
+  const { openMobile, setOpenMobile, state: sidebarState } = useSidebar();
 
   const handleLinkClick = () => {
     if (openMobile) {
@@ -103,32 +99,27 @@ export function SidebarNav() {
       {navItems.map((item, index) => {
         if (item.isGroup) {
           const groupItem = item as NavItemGroup;
+          const GroupDisplayIcon = groupItem.items.length > 0 ? groupItem.items[0].icon : Hotel; // Fallback icon
           return (
             <React.Fragment key={`group-${index}`}>
               <SidebarMenuItem className="mt-2">
                  <span className="px-2 py-1 text-xs font-semibold text-muted-foreground group-data-[collapsible=icon]:hidden">{groupItem.label}</span>
                  <span className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:my-1">
-                    {groupItem.items.length > 0 && (() => {
-                        const GroupDisplayIcon = groupItem.items[0].icon;
-                        return <GroupDisplayIcon className="w-4 h-4 opacity-75" />;
-                    })()}
+                    <GroupDisplayIcon className="w-4 h-4 opacity-75" />
                  </span>
               </SidebarMenuItem>
               {groupItem.items.map(subItem => {
                 const SubItemIcon = subItem.icon;
                 return (
                   <SidebarMenuItem key={subItem.href}>
-                    <Link href={subItem.href} passHref legacyBehavior>
+                    <Link href={subItem.href}>
                       <SidebarMenuButton
-                        asChild
                         isActive={pathname === subItem.href || (subItem.href !== "/dashboard" && pathname.startsWith(subItem.href))}
                         onClick={handleLinkClick}
-                        tooltip={subItem.label}
+                        tooltip={sidebarState === 'collapsed' ? subItem.label : undefined}
                       >
-                        <a>
-                          <SubItemIcon />
-                          <span>{subItem.label}</span>
-                        </a>
+                        <SubItemIcon />
+                        <span>{subItem.label}</span>
                       </SidebarMenuButton>
                     </Link>
                   </SidebarMenuItem>
@@ -141,17 +132,14 @@ export function SidebarNav() {
           const ItemIcon = singleItem.icon;
           return (
             <SidebarMenuItem key={singleItem.href}>
-              <Link href={singleItem.href} passHref legacyBehavior>
+              <Link href={singleItem.href}>
                 <SidebarMenuButton
-                  asChild
                   isActive={pathname === singleItem.href || (singleItem.href !== "/dashboard" && pathname.startsWith(singleItem.href))}
                   onClick={handleLinkClick}
-                  tooltip={singleItem.label}
+                  tooltip={sidebarState === 'collapsed' ? singleItem.label : undefined}
                 >
-                  <a>
-                    <ItemIcon />
-                    <span>{singleItem.label}</span>
-                  </a>
+                  <ItemIcon />
+                  <span>{singleItem.label}</span>
                 </SidebarMenuButton>
               </Link>
             </SidebarMenuItem>
