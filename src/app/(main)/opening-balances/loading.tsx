@@ -20,7 +20,7 @@ export default function OpeningBalancesLoading() {
       </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        {[...Array(2)].map((_, i) => (
+        {[...Array(2)].map((_, i) => ( // Use index `i` for the key
           <Card key={`major-cat-${i}`} className="shadow-md">
             <CardHeader>
               <Skeleton className="h-6 w-1/2 mb-2" /> {/* CardTitle */}
@@ -46,15 +46,15 @@ export default function OpeningBalancesLoading() {
         ))}
       </div>
 
-      {[...Array(3)].map((sectionIndex) => (
-        <Card key={`list-cat-${sectionIndex}`} className="mb-6 shadow-md">
+      {[...Array(3)].map((_, outerIndex) => ( // outerIndex will be 0, 1, 2
+        <Card key={`list-cat-${outerIndex}`} className="mb-6 shadow-md">
           <CardHeader>
             <Skeleton className="h-6 w-1/3 mb-2" /> {/* CardTitle */}
             <Skeleton className="h-4 w-2/3 mb-1" /> {/* CardDescription */}
           </CardHeader>
           <CardContent className="space-y-6">
-            {[...Array(2)].map((_, itemIndex) => (
-              <div key={`item-${sectionIndex}-${itemIndex}`} className="p-4 border rounded-md bg-card/50">
+            {[...Array(2)].map((_, itemIndex) => ( // itemIndex will be 0, 1
+              <div key={`item-${outerIndex}-${itemIndex}`} className="p-4 border rounded-md bg-card/50">
                 <Skeleton className="h-5 w-1/4 mb-2" /> {/* Item Title (Bank/Customer/Vendor Name) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
