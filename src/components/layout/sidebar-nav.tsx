@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -13,7 +14,6 @@ import {
   CreditCard,
   Receipt,
   Settings,
-  BarChart3,
   Hotel,
   Users,
   Truck,
@@ -23,7 +23,7 @@ import {
   ArchiveRestore,
   ShoppingCart,
   DollarSign,
-  ClipboardList, // Added for Reports
+  ClipboardList, 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -89,6 +89,7 @@ const navItems: NavItemType[] = [
       { href: "/reports/profit-loss", label: "Profit & Loss", icon: ClipboardList },
     ]
   },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function SidebarNav() {
@@ -119,10 +120,9 @@ export function SidebarNav() {
                 const SubItemIcon = subItem.icon;
                 return (
                   <SidebarMenuItem key={subItem.href}>
-                    <Link href={subItem.href}>
+                    <Link href={subItem.href} onClick={handleLinkClick}>
                       <SidebarMenuButton
                         isActive={pathname === subItem.href || (subItem.href !== "/dashboard" && pathname.startsWith(subItem.href))}
-                        onClick={handleLinkClick}
                         tooltip={sidebarState === 'collapsed' ? subItem.label : undefined}
                       >
                         <SubItemIcon />
@@ -139,10 +139,9 @@ export function SidebarNav() {
           const ItemIcon = singleItem.icon;
           return (
             <SidebarMenuItem key={singleItem.href}>
-              <Link href={singleItem.href}>
+              <Link href={singleItem.href} onClick={handleLinkClick}>
                 <SidebarMenuButton
                   isActive={pathname === singleItem.href || (singleItem.href !== "/dashboard" && pathname.startsWith(singleItem.href))}
-                  onClick={handleLinkClick}
                   tooltip={sidebarState === 'collapsed' ? singleItem.label : undefined}
                 >
                   <ItemIcon />
