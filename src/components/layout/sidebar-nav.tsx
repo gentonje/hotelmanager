@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -24,6 +23,7 @@ import {
   ArchiveRestore,
   ShoppingCart,
   DollarSign,
+  ClipboardList, // Added for Reports
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -41,7 +41,7 @@ interface NavSubItem {
 }
 
 interface NavItemGroup {
-  label: string;
+  label:string;
   isGroup: true;
   items: NavSubItem[];
 }
@@ -82,6 +82,13 @@ const navItems: NavItemType[] = [
   },
   { href: "/vendors", label: "Vendors", icon: Truck },
   { href: "/customers", label: "Customers", icon: Users },
+  {
+    label: "Reports",
+    isGroup: true,
+    items: [
+      { href: "/reports/profit-loss", label: "Profit & Loss", icon: ClipboardList },
+    ]
+  },
 ];
 
 export function SidebarNav() {
