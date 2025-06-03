@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -56,6 +55,8 @@ interface FormCashSale extends Omit<CashSaleType, 'date' | 'currency' | 'id' | '
   currency: Currency;
 }
 
+const NONE_CUSTOMER_VALUE = "_NONE_CUSTOMER_"; // Sentinel value for no customer
+
 export default function CashSalesHistoryPage() {
   const [cashSales, setCashSales] = useState<CashSaleType[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,6 +65,7 @@ export default function CashSalesHistoryPage() {
   const [customersList, setCustomersList] = useState<Pick<Customer, 'id' | 'name'>[]>([]);
   
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingCustomers, setIsFetchingCustomers] = useState(false); // Separate loading state for customers
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -83,12 +85,14 @@ export default function CashSalesHistoryPage() {
   }, [toast]);
 
   const fetchCustomers = async () => {
+    setIsFetchingCustomers(true);
     const { data, error } = await supabase.from('customers').select('id, name');
     if (error) {
       toast({ title: "Error fetching customers", description: error.message, variant: "destructive" });
     } else {
       setCustomersList(data || []);
     }
+    setIsFetchingCustomers(false);
   };
 
   useEffect(() => {
@@ -108,12 +112,16 @@ export default function CashSalesHistoryPage() {
   };
 
   const handleSelectChange = (field: 'currency' | 'revenue_category' | 'customer_name', value: string) => {
-    setCurrentSale(prev => ({ ...prev, [field]: value as any }));
+    let processedValue = value;
+    if (field === 'customer_name' && value === NONE_CUSTOMER_VALUE) {
+      processedValue = ''; // Set to empty string or null to represent no customer
+    }
+    setCurrentSale(prev => ({ ...prev, [field]: processedValue as any }));
   };
 
   const resetForm = () => {
     setEditingSale(null);
-    setCurrentSale({ date: new Date(), currency: 'USD', amount: 0 });
+    setCurrentSale({ date: new Date(), currency: 'USD', amount: 0, customer_name: '' });
     setIsModalOpen(false);
   };
 
@@ -164,7 +172,7 @@ export default function CashSalesHistoryPage() {
       details: sale.details,
       amount: sale.amount,
       currency: sale.currency as Currency,
-      customer_name: sale.customer_name,
+      customer_name: sale.customer_name || '', // Ensure it's an empty string if null/undefined
       revenue_category: sale.revenue_category,
     });
     setIsModalOpen(true);
@@ -265,13 +273,17 @@ export default function CashSalesHistoryPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="edit_cash_customer_name" className="font-body">Customer Name (Optional)</Label>
-                <Select value={currentSale.customer_name || ''} onValueChange={(value) => handleSelectChange('customer_name', value)} disabled={isSubmitting || isLoading}>
+                <Select
+                  value={currentSale.customer_name || ""} // Shows placeholder if customer_name is ""
+                  onValueChange={(value) => handleSelectChange('customer_name', value)}
+                  disabled={isSubmitting || isFetchingCustomers}
+                >
                   <SelectTrigger id="edit_cash_customer_name">
-                    <SelectValue placeholder={isLoading ? "Loading customers..." : "Select customer (Optional)"} />
+                    <SelectValue placeholder={isFetchingCustomers ? "Loading customers..." : "Select customer (Optional)"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {isLoading && <SelectItem value="" disabled>Loading...</SelectItem>}
-                    <SelectItem value="">None (Optional)</SelectItem>
+                    {isFetchingCustomers && <SelectItem value="_LOADING_CUSTOMERS_" disabled>Loading...</SelectItem>}
+                    <SelectItem value={NONE_CUSTOMER_VALUE}>None (Optional)</SelectItem>
                     {customersList.map(customer => <SelectItem key={customer.id} value={customer.name}>{customer.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -378,3 +390,4 @@ export default function CashSalesHistoryPage() {
     </>
   );
 }
+
