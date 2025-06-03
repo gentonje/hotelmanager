@@ -3,8 +3,8 @@ import { PageTitle } from "@/components/shared/page-title";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Receipt, PlusCircle } from "lucide-react";
+import { Tabs } from "@/components/ui/tabs";
+import { Receipt } from "lucide-react";
 
 export default function ExpensesLoading() {
   return (
@@ -43,6 +43,9 @@ export default function ExpensesLoading() {
           </CardContent>
         </Card>
       </Tabs>
+      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="quarter-circle-spinner"></div>
+      </div>
     </>
   );
 }

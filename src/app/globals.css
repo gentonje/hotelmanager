@@ -106,3 +106,20 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .quarter-circle-spinner {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 6px solid hsl(var(--muted));
+    border-top-color: hsl(var(--primary));
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}

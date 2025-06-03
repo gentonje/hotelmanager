@@ -20,12 +20,12 @@ export default function TransactionsLoading() {
               <Skeleton className="h-12 w-full" /> {/* Select Trigger */}
             </div>
             <Skeleton className="h-px w-full my-2" /> {/* Separator */}
-            <div className="flex justify-center items-center h-48">
-                <Skeleton className="h-10 w-1/2" /> 
-            </div>
           </div>
         </CardContent>
       </Card>
+      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="quarter-circle-spinner"></div>
+      </div>
     </>
   );
 }

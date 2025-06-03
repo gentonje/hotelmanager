@@ -1,9 +1,9 @@
 
 import { PageTitle } from "@/components/shared/page-title";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Building2, PlusCircle } from "lucide-react";
+import { Building2 } from "lucide-react";
 
 export default function BanksLoading() {
   return (
@@ -43,6 +43,9 @@ export default function BanksLoading() {
           </Table>
         </CardContent>
       </Card>
+      <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+        <div className="quarter-circle-spinner"></div>
+      </div>
     </>
   );
 }
