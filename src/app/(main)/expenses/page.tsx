@@ -58,7 +58,7 @@ export interface Expense {
   amount: number;
   currency: Currency; 
   paid_to?: string;
-  vendor_id?: string; 
+  vendor_id?: string | null; 
   is_cash_purchase?: boolean; 
   related_credit_purchase_payment_id?: string; 
   created_at?: string;
@@ -71,6 +71,9 @@ interface FormExpense extends Omit<Expense, 'date' | 'currency' | 'vendors'> {
   currency: Currency;
 }
 
+const NONE_VENDOR_VALUE = "_NONE_VENDOR_";
+const LOADING_VENDORS_VALUE = "_LOADING_VENDORS_";
+
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [vendorsList, setVendorsList] = useState<Pick<Vendor, 'id' | 'name'>[]>([]);
@@ -79,11 +82,13 @@ export default function ExpensesPage() {
   const [currentExpense, setCurrentExpense] = useState<Partial<FormExpense>>({ date: new Date(), category: 'Other', currency: 'USD' });
   const [activeTab, setActiveTab] = useState<ExpenseCategory | 'All'>('All');
   const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingVendors, setIsFetchingVendors] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   const fetchExpensesAndVendors = async () => {
     setIsLoading(true);
+    setIsFetchingVendors(true);
     try {
         const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
@@ -100,6 +105,7 @@ export default function ExpensesPage() {
     } catch (error: any) {
          toast({ title: "Error fetching data", description: error.message, variant: "destructive" });
     }
+    setIsFetchingVendors(false);
     setIsLoading(false);
   };
 
@@ -110,7 +116,12 @@ export default function ExpensesPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setCurrentExpense(prev => ({ ...prev, [name]: name === 'amount' ? parseFloat(value) || 0 : value }));
+    if (name === 'paid_to' && currentExpense.vendor_id) {
+      // User is typing a direct name, so clear the selected vendor_id
+      setCurrentExpense(prev => ({ ...prev, vendor_id: undefined, [name]: value }));
+    } else {
+      setCurrentExpense(prev => ({ ...prev, [name]: name === 'amount' ? parseFloat(value) || 0 : value }));
+    }
   };
   
   const handleDateChange = (dateVal: Date | undefined) => {
@@ -127,14 +138,18 @@ export default function ExpensesPage() {
     setCurrentExpense(prev => ({...prev, currency: value as Currency}));
   };
 
-  const handleVendorChange = (vendorName: string) => {
-    const selectedVendor = vendorsList.find(v => v.name === vendorName);
-    setCurrentExpense(prev => ({ ...prev, vendor_id: selectedVendor?.id, paid_to: selectedVendor?.name }));
+  const handleVendorChange = (selectedValue: string) => {
+    if (selectedValue === NONE_VENDOR_VALUE) {
+      setCurrentExpense(prev => ({ ...prev, vendor_id: undefined, paid_to: '' }));
+    } else {
+      const selectedVendor = vendorsList.find(v => v.id === selectedValue);
+      setCurrentExpense(prev => ({ ...prev, vendor_id: selectedVendor?.id, paid_to: selectedVendor?.name }));
+    }
   };
 
   const resetForm = () => {
     setEditingExpense(null);
-    setCurrentExpense({ date: new Date(), category: 'Other', currency: 'USD' });
+    setCurrentExpense({ date: new Date(), category: 'Other', currency: 'USD', paid_to: '', vendor_id: undefined });
     setIsModalOpen(false);
   };
 
@@ -152,7 +167,7 @@ export default function ExpensesPage() {
       description: currentExpense.description!,
       amount: currentExpense.amount!,
       currency: currentExpense.currency!,
-      paid_to: currentExpense.paid_to, 
+      paid_to: currentExpense.vendor_id ? vendorsList.find(v => v.id === currentExpense.vendor_id)?.name : currentExpense.paid_to, 
       vendor_id: currentExpense.vendor_id || null, 
       is_cash_purchase: currentExpense.is_cash_purchase || false, 
     };
@@ -191,6 +206,8 @@ export default function ExpensesPage() {
         ...expense,
         date: expense.date ? parseISO(expense.date) : new Date(),
         currency: expense.currency || 'USD', 
+        vendor_id: expense.vendor_id || undefined,
+        paid_to: expense.paid_to || '',
     });
     setIsModalOpen(true);
   };
@@ -218,6 +235,9 @@ export default function ExpensesPage() {
 
   const filteredExpenses = activeTab === 'All' ? expenses : expenses.filter(exp => exp.category === activeTab);
   const expenseCategoriesSelect: ExpenseCategory[] = ['Staff Salaries', 'Taxes', 'Utilities', 'Supplies', 'Maintenance', 'Marketing', 'Cost of Goods Sold - Bar', 'Cost of Goods Sold - Restaurant', 'Operating Supplies', 'Other'];
+
+  // Determine the value for the Select component
+  const vendorSelectValue = currentExpense.vendor_id || (currentExpense.paid_to && !vendorsList.find(v => v.id === currentExpense.vendor_id) ? NONE_VENDOR_VALUE : "");
 
 
   return (
@@ -281,24 +301,24 @@ export default function ExpensesPage() {
             <div className="grid gap-2">
                 <Label htmlFor="vendor_id_expenses" className="font-body">Paid To / Vendor (Optional)</Label>
                  <Select
-                    value={currentExpense.paid_to || vendorsList.find(v => v.id === currentExpense.vendor_id)?.name || ""}
+                    value={vendorSelectValue}
                     onValueChange={handleVendorChange}
-                    disabled={isSubmitting || isLoading}
+                    disabled={isSubmitting || isFetchingVendors}
                   >
                     <SelectTrigger id="vendor_id_expenses">
-                      <SelectValue placeholder={isLoading ? "Loading vendors..." : "Select vendor or type name"} />
+                      <SelectValue placeholder={isFetchingVendors ? "Loading vendors..." : "Select vendor or type name"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {isLoading && <SelectItem value="" disabled>Loading...</SelectItem>}
-                      <SelectItem value="">None / Direct Name</SelectItem>
+                      {isFetchingVendors && <SelectItem value={LOADING_VENDORS_VALUE} disabled>Loading...</SelectItem>}
+                      <SelectItem value={NONE_VENDOR_VALUE}>None / Direct Name</SelectItem>
                       {vendorsList.map(vendor => (
-                        <SelectItem key={vendor.id} value={vendor.name}>
+                        <SelectItem key={vendor.id} value={vendor.id}>
                           {vendor.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  {!vendorsList.find(v => v.name === currentExpense.paid_to) && !currentExpense.vendor_id && (
+                  {!currentExpense.vendor_id && (
                      <Input 
                         name="paid_to" 
                         value={currentExpense.paid_to || ''} 
@@ -311,7 +331,7 @@ export default function ExpensesPage() {
             </div>
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="outline" onClick={resetForm} disabled={isSubmitting}>Cancel</Button></DialogClose>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting || isFetchingVendors}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {editingExpense ? 'Save Changes' : 'Add Expense'}
               </Button>
