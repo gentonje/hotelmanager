@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -11,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Loader2, ClipboardList, CalendarIcon, Printer, Filter, XCircle } from "lucide-react";
-import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfYear, endOfYear, parseISO, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { RevenueCategory } from '@/app/(main)/transactions/page';
 import type { ExpenseCategory as ExistingExpenseCategory } from '@/app/(main)/expenses/page';
@@ -324,3 +325,4 @@ export default function ProfitLossPage() {
     </>
   );
 }
+
