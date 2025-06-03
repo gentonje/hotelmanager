@@ -4,7 +4,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'PYRAMID HOTEL',
+  title: 'TORIT HOTEL',
   description: 'Comprehensive Hotel Management App',
 };
 
