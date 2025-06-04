@@ -29,7 +29,7 @@ export function HeaderMain() {
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" className="relative h-8 w-8 rounded-full">
               <Avatar className="h-8 w-8">
-                <AvatarImage src="https://placehold.co/40x40.png" alt="User avatar" data-ai-hint="user avatar" />
+                <AvatarImage src="https://images.unsplash.com/photo-1512621776951-a57141f2eefd?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxGT09EfGVufDB8fHx8MTc0OTA0MDg5M3ww&ixlib=rb-4.1.0&q=80&w=1080" alt="User avatar" data-ai-hint="user avatar" />
                 <AvatarFallback>TH</AvatarFallback>
               </Avatar>
             </Button>
