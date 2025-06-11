@@ -12,7 +12,7 @@ interface PageTitleProps {
 
 export function PageTitle({ title, subtitle, icon: Icon, className, children }: PageTitleProps) {
   return (
-    <div className={cn("mb-6 md:mb-8", className)}>
+    <div className={cn("mb-4 md:mb-6", className)}>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
@@ -32,3 +32,4 @@ export function PageTitle({ title, subtitle, icon: Icon, className, children }: 
     </div>
   );
 }
+

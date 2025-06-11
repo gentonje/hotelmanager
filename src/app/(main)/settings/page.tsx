@@ -161,12 +161,12 @@ export default function SettingsPage() {
       <PageTitle title="Settings & Data Management" subtitle="Manage your application data, export, import, or reset." icon={Settings} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-        <Card className="shadow-lg m-2">
-          <CardHeader>
+        <Card className="shadow-lg">
+          <CardHeader className="p-4">
             <CardTitle className="font-headline flex items-center"><Download className="mr-2 h-5 w-5" /> Data Export</CardTitle>
             <CardDescription className="font-body">Download your data from various tables as CSV files.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-1">
+          <CardContent className="p-4 space-y-2">
             {exportableTables.map(table => (
               <Button
                 key={table.name}
@@ -186,12 +186,12 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg m-2">
-          <CardHeader>
+        <Card className="shadow-lg">
+          <CardHeader className="p-4">
             <CardTitle className="font-headline flex items-center"><Upload className="mr-2 h-5 w-5" /> Data Import (Placeholder)</CardTitle>
             <CardDescription className="font-body">Import data from CSV files. This feature is a placeholder for UI demonstration.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-1">
+          <CardContent className="p-4 space-y-2">
             <div className="grid gap-2">
               <Label htmlFor="import-file-input" className="font-body">Select CSV File</Label>
               <Input 
@@ -220,14 +220,14 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-lg m-2 border-destructive">
-          <CardHeader>
+        <Card className="shadow-lg border-destructive">
+          <CardHeader className="p-4">
             <CardTitle className="font-headline flex items-center text-destructive"><AlertTriangle className="mr-2 h-5 w-5" /> Data Reset</CardTitle>
             <CardDescription className="font-body text-destructive">
               Permanently delete data from your database. This action is irreversible. Proceed with extreme caution.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-1">
+          <CardContent className="p-4 space-y-2">
             {dataGroupsToClear.map(group => (
               <AlertDialog key={group.label}>
                 <AlertDialogTrigger asChild>
@@ -281,3 +281,4 @@ export default function SettingsPage() {
     </>
   );
 }
+
