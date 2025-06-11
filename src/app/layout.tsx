@@ -4,7 +4,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'TORIT HOTEL',
+  title: 'MAKUJA JUNCTION INN',
   description: 'Comprehensive Hotel Management App',
 };
 
